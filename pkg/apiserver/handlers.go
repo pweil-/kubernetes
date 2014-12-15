@@ -38,6 +38,7 @@ var specialVerbs = map[string]bool{
 	"proxy":    true,
 	"redirect": true,
 	"watch":    true,
+	"resize":	true,
 }
 
 // KindFromRequest returns Kind if Kind can be extracted from the request.  Otherwise, the empty string.

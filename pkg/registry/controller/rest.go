@@ -96,6 +96,15 @@ func (rs *REST) Get(ctx api.Context, id string) (runtime.Object, error) {
 	return controller, err
 }
 
+func (rs *REST) Resize(ctx api.Context, id string, size int) (<-chan apiserver.RESTResult, error) {
+	controller, err := rs.registry.GetController(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	controller.Spec.Replicas = controller.Spec.Replicas + size
+	return rs.Update(ctx, controller)
+}
+
 // List obtains a list of ReplicationControllers that match selector.
 func (rs *REST) List(ctx api.Context, label, field labels.Selector) (runtime.Object, error) {
 	if !field.Empty() {

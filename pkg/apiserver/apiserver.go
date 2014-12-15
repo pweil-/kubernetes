@@ -178,6 +178,13 @@ func (g *APIGroupVersion) InstallREST(container *restful.Container, root string,
 	redirectHandler := &RedirectHandler{g.handler.storage, g.handler.codec}
 	opHandler := &OperationHandler{g.handler.ops, g.handler.codec}
 
+	glog.Infof("-------------------------------------- Registering handler with prefix %s", prefix + "/resize/")
+	resizeHandler := &ResizeHandler{
+		canonicalPrefix: prefix + "/resize/",
+		codec: g.handler.codec,
+		storage: g.handler.storage,
+	}
+
 	// Create a new WebService for this APIGroupVersion at the specified path prefix
 	// TODO: Pass in more descriptive documentation
 	ws := new(restful.WebService)
@@ -233,6 +240,7 @@ func (g *APIGroupVersion) InstallREST(container *restful.Container, root string,
 	mux.Handle(prefix+"/redirect/", http.StripPrefix(prefix+"/redirect/", redirectHandler))
 	mux.Handle(prefix+"/operations", http.StripPrefix(prefix+"/operations", opHandler))
 	mux.Handle(prefix+"/operations/", http.StripPrefix(prefix+"/operations/", opHandler))
+	mux.Handle(prefix+"/resize/", http.StripPrefix(prefix+"/resize/", resizeHandler))
 
 	container.Add(ws)
 }
