@@ -114,25 +114,46 @@ For this proposal, the auto-scaler is a resource:
         ScaleApplication(num int) error
     }
 
-    type AutoScaler struct {       
+    type AutoScaler struct {
+        //common construct
+        TypeMeta
+        //common construct
+        ObjectMeta
+        
+        //Spec defines the configuration options that drive the behavior for this auto-scaler 
+        Spec    AutoScalerSpec  
+        
+        //Status defines the current status of this auto-scaler.
+        Status  AutoScalerStatus               
+     }
+     
+    type AutoScalerSpec struct {
         //Thresholds
         AutoScaleThresholds []AutoScaleThreshold
         
         //turn auto scaling on or off
         Enabled boolean 
+        
         //max replicas that the auto scaler can use, empty is unlimited
         MaxAutoScaleCount int
+        
         //min replicas that the auto scaler can use, empty == 0 (idle) 
         MinAutoScaleCount int 
                        
-        //the label selector that points to a resource implementing the resize verb.  Right now this is a ReplicationController
+        //ObjectReference (pre-existing structure) provides the scalable target.  Right now this is a ReplicationController
         //in the future it could be a job or any resource that implements resize
-        ScalableTargetSelector string
-     }
+        ScalableTarget ObjectReference
+    }
+     
+    type AutoScalerStatus struct {
+        // TODO: open for discussion on what meaningful information can be reported in the status
+        // The status may return the replica count here but we may want more information
+        // such as if the count reflects a threshold being passed
+    }     
      
      
      //abstracts the data analysis from the auto-scaler
-     //example: scale when RequestsPerSecond (type) are above 50 (value) for 30 seconds (duration)
+     //example: scale by 1 (Increment) when RequestsPerSecond (Type) pass comparison (Comparison) of 50 (Value) for 30 seconds (Duration)
      type AutoScaleThresholdInterface interface {
         //called by the auto-scaler to determine if this threshold is met or not
         ShouldScale() boolean
@@ -142,14 +163,24 @@ For this proposal, the auto-scaler is a resource:
         
      //generic type definition
      type AutoScaleThreshold struct {
-         //scale based on this threshold (see below for definition)
+         //scale up or down by this increment
+         Increment int
+         //by querying this statistic
          //example: RequestsPerSecond StatisticType = "requestPerSecond"
          Type StatisticType
          //after this duration
          Duration time.Duration
          //when this value is passed
          Value float
+         //using this comparison (greater than, less than to support falling above or below a value)
+         Comparison string
      } 
+     
+#### Boundary Definitions 
+The `AutoScaleThreshold` definitions provide the boundaries for the auto-scaler.  By defining comparisons that form a range
+along with positive and negative increments you may define bi-directional scaling.  For example the upper bound may be 
+specified as "when requests per second rise above 50 for 30 seconds scale the application up by 1" and a lower bound may 
+be specified as "when requests per second fall below 25 for 30 seconds scale the application down by 1 (implemented by using -1)".
 
 ### Data Aggregator
 
@@ -181,12 +212,24 @@ potentially piggyback on this registry.
             "minAutoScaleCount": 1,
             "thresholds": [
                 {
-                    "id": "myapp-rps",
+                    "id": "myapp-rps-up",
                     "kind": "AutoScaleThreshold",
                     "type": "requestPerSecond", 
                     "durationVal": 30,
                     "durationInterval": "seconds",
                     "value": 50,
+                    "comp" : "greater",
+                    "inc": 1
+                },
+                {
+                    "id": "myapp-rps-down",
+                    "kind": "AutoScaleThreshold",
+                    "type": "requestPerSecond", 
+                    "durationVal": 30,
+                    "durationInterval": "seconds",
+                    "value": 25,
+                    "comp": "less",
+                    "inc": -1
                 }
             ],
             "selector": "myapp-replcontroller"
