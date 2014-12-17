@@ -178,11 +178,12 @@ func (g *APIGroupVersion) InstallREST(container *restful.Container, root string,
 	redirectHandler := &RedirectHandler{g.handler.storage, g.handler.codec}
 	opHandler := &OperationHandler{g.handler.ops, g.handler.codec}
 
-	glog.Infof("-------------------------------------- Registering handler with prefix %s", prefix + "/resize/")
 	resizeHandler := &ResizeHandler{
 		canonicalPrefix: prefix + "/resize/",
 		codec: g.handler.codec,
 		storage: g.handler.storage,
+		ops: g.handler.ops,
+		timeout: g.handler.asyncOpWait,
 	}
 
 	// Create a new WebService for this APIGroupVersion at the specified path prefix

@@ -1,34 +1,37 @@
 package apiserver
 
 import (
-	"strings"
-	"strconv"
-
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/httplog"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/httplog"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 )
 
-
 type ResizeHandler struct {
-	canonicalPrefix	string
-	codec	runtime.Codec
-	storage map[string]RESTStorage
+	canonicalPrefix string
+	codec           runtime.Codec
+	storage         map[string]RESTStorage
+	ops             *Operations
+	timeout         time.Duration
 }
 
-var supportedResizables = map[string] bool {
+var supportedResizables = map[string]bool{
 	"replicationControllers": true,
 }
 
-func (h *ResizeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	namespace := req.URL.Query().Get("namespace")
-	ctx := api.WithNamespaceDefaultIfNone(api.WithNamespace(api.NewDefaultContext(), namespace))
-	replicaCount := req.URL.Query().Get("replicas")
-	inc := req.URL.Query().Get("inc")
+const (
+	paramInc       string = "inc"
+	paramNamespace string = "namespace"
+	urlDelimiter   string = "/"
+)
 
-	pathParts := strings.SplitN(req.URL.Path, "/", 3)
+func (h *ResizeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	pathParts := strings.SplitN(req.URL.Path, urlDelimiter, 3)
 
 	if len(pathParts) < 2 {
 		notFound(w, req)
@@ -37,10 +40,11 @@ func (h *ResizeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	resizableType := pathParts[0]
 	resizableName := pathParts[1]
+	ctx := h.contextFromRequest(req)
+	inc := req.URL.Query().Get(paramInc)
 
 	if !h.isSupportedType(resizableType) {
-		httplog.LogOf(req, w).Addf("%s is not a supported resizable type", resizableType)
-		notFound(w, req)
+		badRequest("The requested resource does not support resizing", w)
 		return
 	}
 
@@ -53,50 +57,42 @@ func (h *ResizeHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	resizableStorage, ok := storage.(Resizable)
 
+	//shouldn't ever get here if the supported types are correct, but check anyway
 	if !ok {
-		w.Write([]byte("failed storage"))
-		//todo handle the error
+		badRequest("The requested resource does not support resizing", w)
+		return
 	}
 
-	if len(replicaCount) > 0 {
-		//todo handle the error
-//		i, _ := strconv.ParseInt(replicaCount, 10, 32)
-////		h.handleSetReplicaCount(i)
-//
-//
-	} else {
-		//todo handle the error
-		i, _ := strconv.ParseInt(inc, 10, 32)
-//		h.handleIncrement(i)
+	i, err := strconv.ParseInt(inc, 10, 32)
 
-//		out, err := resizableStorage.Resize(ctx, resizableName, int(i))
-		_, err := resizableStorage.Resize(ctx, resizableName, int(i))
-
-		if err != nil {
-			errorJSON(err, h.codec, w)
-			return
-		}
-
-		obj, err := storage.Get(ctx, resizableName)
-
-		if err != nil {
-			writeJSON(http.StatusInternalServerError, h.codec, obj, w)
-			return
-		}
-
-		//todo this isn't updated right away so it doesn't immediately show the desired
-		//state, should I just return nothing or ok or something?
-		writeJSON(http.StatusOK, h.codec, obj, w)
+	if err != nil {
+		badRequest(fmt.Sprintf("Unable to convert %v to an integer", inc), w)
+		return
 	}
+
+	out, err := resizableStorage.Resize(ctx, resizableName, int(i))
+
+	if err != nil {
+		errorJSON(err, h.codec, w)
+		return
+	}
+
+	op := createOperation(h.ops, out, true, h.timeout, nil, 0)
+	finishReq(op, req, w, h.codec)
 }
 
-func (h *ResizeHandler) validateParameters(replicaCount string, inc string) bool {
-	//are they integers
-	//is only one set - warn, replica count will override increment behavior
-	return true
+func (h *ResizeHandler) contextFromRequest(req *http.Request) api.Context {
+	namespace := req.URL.Query().Get(paramNamespace)
+	ctx := api.WithNamespaceDefaultIfNone(api.WithNamespace(api.NewDefaultContext(), namespace))
+	return ctx
 }
 
 func (h *ResizeHandler) isSupportedType(s string) bool {
 	_, ok := supportedResizables[s]
 	return ok
+}
+
+func badRequest(msg string, w http.ResponseWriter) {
+	w.WriteHeader(http.StatusBadRequest)
+	w.Write([]byte(msg))
 }
