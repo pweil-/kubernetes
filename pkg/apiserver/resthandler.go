@@ -210,8 +210,8 @@ func (h *RESTHandler) handleRESTStorage(parts []string, req *http.Request, w htt
 			errorJSON(err, h.codec, w)
 			return
 		}
-		op := h.createOperation(out, sync, timeout, curry(h.setSelfLinkAddName, req))
-		h.finishReq(op, req, w)
+		op := createOperation(h.ops, out, sync, timeout, curry(h.setSelfLinkAddName, req), h.asyncOpWait)
+		finishReq(op, req, w, h.codec)
 
 	case "DELETE":
 		if len(parts) != 2 {
@@ -223,8 +223,8 @@ func (h *RESTHandler) handleRESTStorage(parts []string, req *http.Request, w htt
 			errorJSON(err, h.codec, w)
 			return
 		}
-		op := h.createOperation(out, sync, timeout, nil)
-		h.finishReq(op, req, w)
+		op := createOperation(h.ops, out, sync, timeout, nil, h.asyncOpWait)
+		finishReq(op, req, w, h.codec)
 
 	case "PUT":
 		if len(parts) != 2 {
@@ -247,8 +247,8 @@ func (h *RESTHandler) handleRESTStorage(parts []string, req *http.Request, w htt
 			errorJSON(err, h.codec, w)
 			return
 		}
-		op := h.createOperation(out, sync, timeout, curry(h.setSelfLink, req))
-		h.finishReq(op, req, w)
+		op := createOperation(h.ops, out, sync, timeout, curry(h.setSelfLink, req), h.asyncOpWait)
+		finishReq(op, req, w, h.codec)
 
 	default:
 		notFound(w, req)
@@ -256,19 +256,19 @@ func (h *RESTHandler) handleRESTStorage(parts []string, req *http.Request, w htt
 }
 
 // createOperation creates an operation to process a channel response.
-func (h *RESTHandler) createOperation(out <-chan RESTResult, sync bool, timeout time.Duration, onReceive func(RESTResult)) *Operation {
-	op := h.ops.NewOperation(out, onReceive)
+func createOperation(ops *Operations, out <-chan RESTResult, sync bool, timeout time.Duration, onReceive func(RESTResult), asyncOpWait time.Duration) *Operation {
+	op := ops.NewOperation(out, onReceive)
 	if sync {
 		op.WaitFor(timeout)
-	} else if h.asyncOpWait != 0 {
-		op.WaitFor(h.asyncOpWait)
+	} else if asyncOpWait != 0 {
+		op.WaitFor(asyncOpWait)
 	}
 	return op
 }
 
 // finishReq finishes up a request, waiting until the operation finishes or, after a timeout, creating an
 // Operation to receive the result and returning its ID down the writer.
-func (h *RESTHandler) finishReq(op *Operation, req *http.Request, w http.ResponseWriter) {
+func finishReq(op *Operation, req *http.Request, w http.ResponseWriter, codec runtime.Codec) {
 	result, complete := op.StatusOrResult()
 	obj := result.Object
 	if complete {
@@ -282,8 +282,8 @@ func (h *RESTHandler) finishReq(op *Operation, req *http.Request, w http.Respons
 				status = stat.Code
 			}
 		}
-		writeJSON(status, h.codec, obj, w)
+		writeJSON(status, codec, obj, w)
 	} else {
-		writeJSON(http.StatusAccepted, h.codec, obj, w)
+		writeJSON(http.StatusAccepted, codec, obj, w)
 	}
 }

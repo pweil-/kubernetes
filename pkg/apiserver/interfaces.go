@@ -53,6 +53,10 @@ type RESTStorage interface {
 	Update(ctx api.Context, obj runtime.Object) (<-chan RESTResult, error)
 }
 
+type Resizable interface {
+	Resize(ctx api.Context, id string, size int) (<-chan RESTResult, error)
+}
+
 // RESTResult indicates the result of a REST transformation.
 type RESTResult struct {
 	// The result of this operation. May be nil if the operation has no meaningful
