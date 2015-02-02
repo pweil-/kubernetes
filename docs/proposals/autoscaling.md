@@ -30,6 +30,7 @@ written later that sets thresholds automatically based on past behavior (CPU use
 * The auto-scaler must be aware of user defined actions so it does not override them unintentionally (for instance someone 
 explicitly setting the replica count to 0 should mean that the auto-scaler does not try to scale the application up)
 * It should be possible to write and deploy a custom auto-scaler without modifying existing auto-scalers
+* Auto-scalers must be able to monitor multiple replication controllers while only targeting a single scalable object
 
 ## Use Cases
 
@@ -77,39 +78,12 @@ use a client/cache implementation to receive watch data from the data aggregator
 scaling the application.  Auto-scalers are created and defined like other resources via REST endpoints and belong to the 
 namespace just as a `ReplicationController` or `Service`.
 
-There are two options for implementing the auto-scaler:
+Since an auto-scaler is a durable object it is best represented as a resource.  
 
-1.  Annotations on a `ReplicationController`
-    
-    Pros:
-        
-      * uses an existing resource, not another component that must be defined separately
-      * easy to know what the target of the auto-scaler is since the config for the scaler is attached to the target      
-      
-    Cons:
-    
-      * configuration in annotations is marginally more difficult than plain old json  
-      * rather than watching explicitly for new auto-scaler definitions, the auto-scaler controller must watch all 
-      `ReplicationController`s and create auto-scalers when appropriate.  As new auto-scalable resources are defined the 
-      auto-scaler controller must also watch those resources
-      
-1.  As a new resource
-    
-    Pros:
-        
-      * auto-scalers are managed by the user independent of the `ReplicationController`
-      * flexible by using a selector to the scalable resource (that implements the `resize` verb), future implementations 
-      *may* require no extra work on the auto-scaler side
-      
-    Cons:
-    
-      * one more resource to store, manage, and monitor
-  
-For this proposal, the auto-scaler is a resource:
-
+```go
     //The auto scaler interface
     type AutoScalerInterface interface {        
-        //Adjust a resource's replica count.  Calls resize endpoint.  Args to this are based on what the endpoint
+        //ScaleApplication adjusts a resource's replica count.  Calls resize endpoint.  Args to this are based on what the endpoint
         //can support.  See https://github.com/GoogleCloudPlatform/kubernetes/issues/1629
         ScaleApplication(num int) error
     }
@@ -128,21 +102,28 @@ For this proposal, the auto-scaler is a resource:
      }
      
     type AutoScalerSpec struct {
-        //Thresholds
+        //AutoScaleThresholds holds a collection of AutoScaleThresholds that drive the auto scaler
         AutoScaleThresholds []AutoScaleThreshold
         
-        //turn auto scaling on or off
+        //Enabled turns auto scaling on or off
         Enabled boolean 
         
-        //max replicas that the auto scaler can use, empty is unlimited
+        //MaxAutoScaleCount defines the max replicas that the auto scaler can use.  This value must be greater than 
+        //0 and >= MinAutoScaleCount
         MaxAutoScaleCount int
         
-        //min replicas that the auto scaler can use, empty == 0 (idle) 
+        //MinAutoScaleCount defines the minimum number replicas that the auto scaler can reduce to, 
+        //0 means that the application is allowed to idle 
         MinAutoScaleCount int 
                        
-        //ObjectReference (pre-existing structure) provides the scalable target.  Right now this is a ReplicationController
-        //in the future it could be a job or any resource that implements resize
+        //ScalableTarget provides the resizeable target.  Right now this is a ReplicationController
+        //in the future it could be a job or any resource that implements resize.  
         ScalableTarget ObjectReference
+        
+        //Selector defines a set of capacity that the auto-scaler is monitoring (replication controllers).  Generally, the auto-scaler is 
+        //driven by the AutoScaleThresholds, however, this gives visibility of aggregate items like total number of pods
+        //backing a service without having to aggregate them into a statistic
+        Selector map[string]string
     }
      
     type AutoScalerStatus struct {
@@ -152,29 +133,29 @@ For this proposal, the auto-scaler is a resource:
     }     
      
      
-     //abstracts the data analysis from the auto-scaler
+     //AutoScaleThresholdInterface abstracts the data analysis from the auto-scaler
      //example: scale by 1 (Increment) when RequestsPerSecond (Type) pass comparison (Comparison) of 50 (Value) for 30 seconds (Duration)
      type AutoScaleThresholdInterface interface {
         //called by the auto-scaler to determine if this threshold is met or not
         ShouldScale() boolean
      }
       
-     type StatisticType string
         
-     //generic type definition
+     //AutoScaleThreshold is a single statistic used to drive the auto-scaler in scaling decisions
      type AutoScaleThreshold struct {
-         //scale up or down by this increment
+         //Increment determines how the auot-scaler should scale up or down (positive number to scale up based on this threshold
+         //negative number to scale down by this threshold)
          Increment int
-         //by querying this statistic
-         //example: RequestsPerSecond StatisticType = "requestPerSecond"
-         Type StatisticType
-         //after this duration
+         //Selector is the statistics selector that determines how the Threshold receives data from aggregated (or single) statistics. 
+         Selector map[string]string        
+         //Duration is the time lapse after which this threshold is considered passed
          Duration time.Duration
-         //when this value is passed
+         //Value is the number at which, after the duration is passed, this threshold is considered to be triggered
          Value float
-         //using this comparison (greater than, less than to support falling above or below a value)
+         //Comparison component to be applied to the value.
          Comparison string
      } 
+```
      
 #### Boundary Definitions 
 The `AutoScaleThreshold` definitions provide the boundaries for the auto-scaler.  By defining comparisons that form a range
@@ -197,6 +178,34 @@ resolves to a value that can be checked against a configured threshold.
 Of note: If the statistics gathering mechanisms can be initialized with a registry other components storing statistics can
 potentially piggyback on this registry.
 
+### Interactions with a deployment
+
+In a deployment it is likely that multiple replication controllers must be monitored.  For instance, in a [rolling deployment](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/replication-controller.md#rolling-updates)
+there will be multiple replication controllers, with one scaling up and another scaling down.  This means that an 
+auto-scaler must be aware of the entire set of capacity that backs a service so it does not fight with the deployer.  `AutoScalerSpec.Selector` 
+is what provides this ability.  By using a selector that spans the entire service the auto-scaler can monitor capacity 
+of multiple replication controllers and check that capacity against the `AutoScalerSpec.MaxAutoScaleCount` and 
+`AutoScalerSpec.MinAutoScaleCount` while still only targeting a specific `ReplicationController`.  
+
+In the course of a rolling update it would be up to the deployment orchestration to re-target the auto-scaler.  
+By re-targeting the auto-scaler as part of the deployment process we  can ensure that the deployment process and 
+auto-scaler do not fight over a scenario where `AutoScalerSpec.MinAutoScaleCount` is greater than zero but the deployment 
+orchestration must scale to zero.
+
+During deployment orchestration the auto-scaler may be making decisions to scale its target up or down.  In order to prevent
+the scaler from fighting with a deployment process that is scaling one replication controller up and scaling another one
+down the deployment process must assume that the current replica count may be changed by objects other than itself and 
+account for this in the scale up or down process.   Therefore, the deployment process may no longer target an exact number
+of instances to be deployed.  It must be satisfied that the replica count for the deployment meets or exceeds the number
+of requested instances.
+
+Auto-scaling down in a deployment scenario is a special case.  In order for the deployment to complete successfully the 
+deployment orchestration must ensure that the desired number of instances that are supposed to be deployed has been met.
+If the auto-scaler is trying to scale the application down (due to no traffic, or other statistics) then the deployment
+process and auto-scaler are fighting to increase and decrease the count of the targeted replication controller.  In order
+to prevent this, deployment orchestration should notify the auto-scaler that a deployment is occurring.  This will 
+temporarily disable negative decrement thresholds until the deployment process is completed.  It is more important for 
+an auto-scaler to be able to grow capacity during a deployment than to shrink the number of instances precisely.   
 
 ## Use Case Realization
 
@@ -210,11 +219,12 @@ potentially piggyback on this registry.
             "apiVersion": "v1beta1",
             "maxAutoScaleCount": 50,
             "minAutoScaleCount": 1,
+            "selector": ["name": "myTargetedReplicationControllers"]
             "thresholds": [
                 {
                     "id": "myapp-rps-up",
                     "kind": "AutoScaleThreshold",
-                    "type": "requestPerSecond", 
+                    "selector": ["name": "requestPerSecond"], 
                     "durationVal": 30,
                     "durationInterval": "seconds",
                     "value": 50,
@@ -224,7 +234,7 @@ potentially piggyback on this registry.
                 {
                     "id": "myapp-rps-down",
                     "kind": "AutoScaleThreshold",
-                    "type": "requestPerSecond", 
+                    "selector": ["name": "requestPerSecond"], 
                     "durationVal": 30,
                     "durationInterval": "seconds",
                     "value": 25,
@@ -232,10 +242,59 @@ potentially piggyback on this registry.
                     "inc": -1
                 }
             ],
-            "selector": "myapp-replcontroller"
+            "scalableTarget": "myapp-replcontroller"
          }
          
 1.  The auto-scaler controller watches for new `AutoScaler` definitions and creates the resource   
 1.  Periodically the auto-scaler loops through defined thresholds and determine if a threshold has been exceeded
 1.  If the app must be scaled the auto-scaler calls the `resize` endpoint for `myapp-replcontroller`
+
+
+### Rolling deployment
+
+1.  User defines the application's auto-scaling resources
     
+         {
+            "id": "myapp-autoscaler",
+            "kind": "AutoScaler",
+            "apiVersion": "v1beta1",
+            "maxAutoScaleCount": 50,
+            "minAutoScaleCount": 0,
+            "selector": ["name": "myTargetedReplicationControllers"]
+            "thresholds": [
+                {
+                    "id": "myapp-rps-up",
+                    "kind": "AutoScaleThreshold",
+                    "selector": ["name": "requestPerSecond"], 
+                    "durationVal": 30,
+                    "durationInterval": "seconds",
+                    "value": 50,
+                    "comp" : "greater",
+                    "inc": 1
+                },
+                {
+                    "id": "myapp-rps-down",
+                    "kind": "AutoScaleThreshold",
+                    "selector": ["name": "requestPerSecond"], 
+                    "durationVal": 30,
+                    "durationInterval": "seconds",
+                    "value": 25,
+                    "comp": "less",
+                    "inc": -1
+                }
+            ],
+            "scalableTarget": "myapp-replcontrollerA"
+         }
+
+1.  The existing environment has `ReplicationController` A, with a label of "myTargetedReplicationControllers" with replica count of 1
+1.  A deployment occurs and creates a new `ReplicationController` B, with a label of "myTargetedReplicationControllers" and a desired
+count of 2
+1.  The deployment orchestration signals that a deployment is in progress, the auto-scaler will ignore "myapp-rps-down" threshold
+triggers
+1.  The deployment orchestration changes the auto-scaler's scalable target to replication controller B 
+1.  The deployment orchestration checks the current replica count of B, sees it is 0, and creates a new pod
+1.  A burst of traffic comes in, the auto-scaler triggers the "myapp-rps-up" threshold and increases the replica count of 
+replication controller B to 2
+1.  The deployment orchestration checks the current replica count of B, sees it is a 2 and understands that it has met the requested
+capacity
+1.  The deployment orchestration signals the deployment is complete, the auto-scaler will no longer ignore the "myapp-rps-down" threshold.
