@@ -116,6 +116,13 @@ func ValidateNamespaceName(name string, prefix bool) (bool, string) {
 	return nameIsDNSSubdomain(name, prefix)
 }
 
+// ValidateAutoScalerName can be used to check whether the given namespace name is valid.
+// Prefix indicates this name will be used as part of generation, in which case
+// trailing dashes are allowed.
+func ValidateAutoScalerName(name string, prefix bool) (bool, string) {
+	return nameIsDNSSubdomain(name, prefix)
+}
+
 // nameIsDNSSubdomain is a ValidateNameFunc for names that must be a DNS subdomain.
 func nameIsDNSSubdomain(name string, prefix bool) (bool, string) {
 	if prefix {
@@ -937,11 +944,55 @@ func ValidateNamespaceUpdate(oldNamespace *api.Namespace, namespace *api.Namespa
 // ValidateAutoScaler tests if required fields are set.
 func ValidateAutoScaler(autoScaler *api.AutoScaler) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
+	allErrs = append(allErrs, ValidateObjectMeta(&autoScaler.ObjectMeta, false, ValidateAutoScalerName).Prefix("metadata")...)
+	allErrs = append(allErrs, ValidateAutoScalerSpec(&autoScaler.Spec)...)
+
+	return allErrs
+}
+
+// ValidateAutoScalerSpec tests is AutoScaler.Spec required fields are set
+func ValidateAutoScalerSpec(spec *api.AutoScalerSpec) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+
+	//must have a defined target
+	if len(spec.TargetSelector) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("targetSelector", spec.TargetSelector))
+	}
+
+	//must have a valid set of min/max
+	if spec.MinAutoScaleCount > spec.MaxAutoScaleCount {
+		allErrs = append(allErrs, errs.NewFieldInvalid("minAutoScaleCount", spec.MinAutoScaleCount, "minAutoScaleCount cannot be greater than maxAutoScaleCount"))
+	}
+
+	//must have a monitor selector
+	if len(spec.MonitorSelector) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("monitorSelector", spec.MonitorSelector))
+	}
+
+	//check all thresholds
+	for _, t := range spec.AutoScaleThresholds {
+		allErrs = append(allErrs, ValidateAutoScaleThreshold(&t)...)
+	}
+
+	return allErrs
+}
+
+// ValidateAutoScaleThreshold ensures required fields are set
+func ValidateAutoScaleThreshold(t *api.AutoScaleThreshold) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+
+	//TODO
+
 	return allErrs
 }
 
 // ValidateNamespaceUpdate tests to make sure a mamespace update can be applied.  Modifies oldAutoScaler.
 func ValidateAutoScalerUpdate(oldAutoScaler *api.AutoScaler, autoScaler *api.AutoScaler) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
+	allErrs = append(allErrs, ValidateObjectMetaUpdate(&oldAutoScaler.ObjectMeta, &autoScaler.ObjectMeta).Prefix("metadata")...)
+
+	//use all creation validations
+	allErrs = append(allErrs, ValidateAutoScaler(autoScaler)...)
+
 	return allErrs
 }
