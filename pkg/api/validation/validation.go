@@ -933,3 +933,15 @@ func ValidateNamespaceUpdate(oldNamespace *api.Namespace, namespace *api.Namespa
 	}
 	return allErrs
 }
+
+// ValidateAutoScaler tests if required fields are set.
+func ValidateAutoScaler(autoScaler *api.AutoScaler) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	return allErrs
+}
+
+// ValidateNamespaceUpdate tests to make sure a mamespace update can be applied.  Modifies oldAutoScaler.
+func ValidateAutoScalerUpdate(oldAutoScaler *api.AutoScaler, autoScaler *api.AutoScaler) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	return allErrs
+}
