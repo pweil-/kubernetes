@@ -52,6 +52,8 @@ func init() {
 		&ResourceQuotaUsage{},
 		&Namespace{},
 		&NamespaceList{},
+		&AutoScaler{},
+		&AutoScalerList{},
 	)
 	// Legacy names are supported
 	Scheme.AddKnownTypeWithName("", "Minion", &Node{})
@@ -85,3 +87,5 @@ func (*ResourceQuotaList) IsAnAPIObject()         {}
 func (*ResourceQuotaUsage) IsAnAPIObject()        {}
 func (*Namespace) IsAnAPIObject()                 {}
 func (*NamespaceList) IsAnAPIObject()             {}
+func (*AutoScaler) IsAnAPIObject()                {}
+func (*AutoScalerList) IsAnAPIObject()            {}

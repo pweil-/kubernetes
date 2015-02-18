@@ -72,6 +72,34 @@ func (rcStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
 	return validation.ValidateReplicationController(controller)
 }
 
+// autoScalerStrategy implements behavior for Services
+// TODO: move to a scaler specific package.
+type autoScalerStrategy struct {
+	runtime.ObjectTyper
+	api.NameGenerator
+}
+
+// AutoScalers is the default logic that applies when creating and updating Service
+// objects.
+var AutoScalers RESTCreateStrategy = autoScalerStrategy{api.Scheme, api.SimpleNameGenerator}
+
+// NamespaceScoped is true for services.
+func (autoScalerStrategy) NamespaceScoped() bool {
+	return true
+}
+
+// ResetBeforeCreate clears fields that are not allowed to be set by end users on creation.
+func (autoScalerStrategy) ResetBeforeCreate(obj runtime.Object) {
+	autoScaler := obj.(*api.AutoScaler)
+	autoScaler.Status = api.AutoScalerStatus{}
+}
+
+// Validate validates a new service.
+func (autoScalerStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
+	autoScaler := obj.(*api.AutoScaler)
+	return validation.ValidateAutoScaler(autoScaler)
+}
+
 // svcStrategy implements behavior for Services
 // TODO: move to a service specific package.
 type svcStrategy struct {
