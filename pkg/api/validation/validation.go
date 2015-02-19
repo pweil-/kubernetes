@@ -970,7 +970,7 @@ func ValidateAutoScalerSpec(spec *api.AutoScalerSpec) errs.ValidationErrorList {
 	}
 
 	//check all thresholds
-	for _, t := range spec.AutoScaleThresholds {
+	for _, t := range spec.Thresholds {
 		allErrs = append(allErrs, ValidateAutoScaleThreshold(&t)...)
 	}
 
