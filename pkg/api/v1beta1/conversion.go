@@ -1133,10 +1133,6 @@ func init() {
 				return err
 			}
 
-			if err := s.DefaultConvert(&in.Spec, &out.Spec, 0); err != nil {
-				return err
-			}
-
 			if err := s.Convert(&in.Spec, &out.Spec, 0); err != nil {
 				return err
 			}
@@ -1144,21 +1140,6 @@ func init() {
 			if err := s.Convert(&in.Status, &out.Status, 0); err != nil {
 				return err
 			}
-
-			return nil
-		},
-		func(in *newer.AutoScalerSpec, out *AutoScalerSpec, s conversion.Scope) error {
-
-
-			if err := s.Convert(&in.Thresholds, &out.Thresholds, 0); err != nil {
-				return err
-			}
-
-			//			out.Enabled = in.Enabled
-			//			out.MaxAutoScaleCount = in.MaxAutoScaleCount
-			//			out.MinAutoScaleCount = in.MinAutoScaleCount
-			//			out.TargetSelector = in.TargetSelector
-			//			out.MonitorSelector = in.MonitorSelector
 
 			return nil
 		},
