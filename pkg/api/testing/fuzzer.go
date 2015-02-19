@@ -233,6 +233,11 @@ func FuzzerFor(t *testing.T, version string, src rand.Source) *fuzz.Fuzzer {
 
 			s.Type = api.SecretTypeOpaque
 		},
+		func(a *api.AutoScaler, c fuzz.Continue) {
+			c.Fuzz(&a.TypeMeta)
+			c.Fuzz(&a.ObjectMeta)
+			c.Fuzz(&a.Spec)
+		},
 	)
 	return f
 }

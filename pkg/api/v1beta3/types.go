@@ -1280,28 +1280,28 @@ type AutoScaler struct {
 
 // AutoScalerSpec defines the auto scaler targets and thresholds
 type AutoScalerSpec struct {
-	//AutoScaleThresholds holds a collection of AutoScaleThresholds that drive the auto scaler
-	AutoScaleThresholds []AutoScaleThreshold
+	//Thresholds holds a collection of AutoScaleThresholds that drive the auto scaler
+	Thresholds []AutoScaleThreshold `json:"thresholds,omitempty"`
 
 	//Enabled turns auto scaling on or off
-	Enabled bool
+	Enabled bool `json:"enabled,omitempty"`
 
 	//MaxAutoScaleCount defines the max replicas that the auto scaler can use.  This value must be greater than
 	//0 and >= MinAutoScaleCount
-	MaxAutoScaleCount int
+	MaxAutoScaleCount int `json:"maxAutoScaleCount,omitempty"`
 
 	//MinAutoScaleCount defines the minimum number replicas that the auto scaler can reduce to,
 	//0 means that the application is allowed to idle
-	MinAutoScaleCount int
+	MinAutoScaleCount int `json:"minAutoScaleCount,omitempty"`
 
 	//TargetSelector provides the resizeable target(s).  Right now this is a ReplicationController
 	//in the future it could be a job or any resource that implements resize.
-	TargetSelector map[string]string
+	TargetSelector map[string]string `json:"targetSelector,omitempty"`
 
 	//MonitorSelector defines a set of capacity that the auto-scaler is monitoring (replication controllers).  Generally, the auto-scaler is
 	//driven by the AutoScaleThresholds, however, this gives visibility of aggregate items like total number of pods
 	//backing a service without having to aggregate them into a statistic
-	MonitorSelector map[string]string
+	MonitorSelector map[string]string `json:"monitorSelector,omitempty"`
 }
 
 type AutoScalerStatus struct{}
@@ -1310,15 +1310,15 @@ type AutoScalerStatus struct{}
 type AutoScaleThreshold struct {
 	//Increment determines how the auot-scaler should scale up or down (positive number to scale up based on this threshold
 	//negative number to scale down by this threshold)
-	Increment int
+	Increment int `json:"increment,omitempty"`
 	//Selector is the statistics selector that determines how the Threshold receives data from aggregated (or single) statistics.
-	Selector map[string]string
+	Selector map[string]string `json:"selector,omitempty"`
 	//Duration is the time lapse in seconds after which this threshold is considered passed
-	Duration int
+	Duration int `json:"duration,omitempty"`
 	//Value is the number at which, after the duration is passed, this threshold is considered to be triggered
-	Value float32
+	Value float32 `json:"value,omitempty"`
 	//Comparison component to be applied to the value.
-	Comparison string
+	Comparison string `json:"comparison,omitempty"`
 }
 
 // AutoScalerList is a list of AutoScaler items

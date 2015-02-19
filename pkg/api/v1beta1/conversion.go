@@ -1113,6 +1113,55 @@ func init() {
 			out.TimeoutSeconds = in.TimeoutSeconds
 			return nil
 		},
+		func(in *newer.AutoScalerList, out *AutoScalerList, s conversion.Scope) error {
+			if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
+				return err
+			}
+			if err := s.Convert(&in.ListMeta, &out.TypeMeta, 0); err != nil {
+				return err
+			}
+			if err := s.Convert(&in.Items, &out.Items, 0); err != nil {
+				return err
+			}
+			return nil
+		},
+		func(in *newer.AutoScaler, out *AutoScaler, s conversion.Scope) error {
+			if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
+				return err
+			}
+			if err := s.Convert(&in.ObjectMeta, &out.TypeMeta, 0); err != nil {
+				return err
+			}
+
+			if err := s.DefaultConvert(&in.Spec, &out.Spec, 0); err != nil {
+				return err
+			}
+
+			if err := s.Convert(&in.Spec, &out.Spec, 0); err != nil {
+				return err
+			}
+
+			if err := s.Convert(&in.Status, &out.Status, 0); err != nil {
+				return err
+			}
+
+			return nil
+		},
+		func(in *newer.AutoScalerSpec, out *AutoScalerSpec, s conversion.Scope) error {
+
+
+			if err := s.Convert(&in.Thresholds, &out.Thresholds, 0); err != nil {
+				return err
+			}
+
+			//			out.Enabled = in.Enabled
+			//			out.MaxAutoScaleCount = in.MaxAutoScaleCount
+			//			out.MinAutoScaleCount = in.MinAutoScaleCount
+			//			out.TargetSelector = in.TargetSelector
+			//			out.MonitorSelector = in.MonitorSelector
+
+			return nil
+		},
 	)
 	if err != nil {
 		// If one of the conversion functions is malformed, detect it immediately.
