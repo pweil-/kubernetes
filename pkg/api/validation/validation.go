@@ -955,8 +955,11 @@ func ValidateAutoScalerSpec(spec *api.AutoScalerSpec) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 
 	//must have a defined target
-	if len(spec.TargetSelector) == 0 {
-		allErrs = append(allErrs, errs.NewFieldRequired("targetSelector", spec.TargetSelector))
+	if spec.Target.Name == "" {
+		allErrs = append(allErrs, errs.NewFieldRequired("target.name", ""))
+	}
+	if spec.Target.Namespace == "" {
+		allErrs = append(allErrs, errs.NewFieldRequired("target.namespace", ""))
 	}
 
 	//must have a valid set of min/max

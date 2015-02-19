@@ -1370,9 +1370,9 @@ type AutoScalerSpec struct {
 	//0 means that the application is allowed to idle
 	MinAutoScaleCount int `json:"minAutoScaleCount,omitempty"`
 
-	//TargetSelector provides the resizeable target(s).  Right now this is a ReplicationController
+	//Target provides the resizeable target.  Right now this is a ReplicationController
 	//in the future it could be a job or any resource that implements resize.
-	TargetSelector map[string]string `json:"targetSelector,omitempty"`
+	Target ObjectReference `json:"target,omitempty"`
 
 	//MonitorSelector defines a set of capacity that the auto-scaler is monitoring (replication controllers).  Generally, the auto-scaler is
 	//driven by the AutoScaleThresholds, however, this gives visibility of aggregate items like total number of pods
