@@ -974,7 +974,7 @@ func ValidateAutoScalerSpec(spec *api.AutoScalerSpec) errs.ValidationErrorList {
 
 	//check all thresholds
 	for _, t := range spec.Thresholds {
-		allErrs = append(allErrs, ValidateAutoScaleThreshold(&t)...)
+		allErrs = append(allErrs, ValidateAutoScaleThreshold(&t).Prefix("thresholds")...)
 	}
 
 	return allErrs
@@ -984,7 +984,48 @@ func ValidateAutoScalerSpec(spec *api.AutoScalerSpec) errs.ValidationErrorList {
 func ValidateAutoScaleThreshold(t *api.AutoScaleThreshold) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 
-	//TODO
+	if len(t.Type) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("type", t.Type))
+	} else {
+		switch t.Type {
+		case api.AutoScaleThresholdTypeValue:
+			allErrs = append(allErrs, validateValueThreshold(t).Prefix("valueConfig")...)
+		case api.AutoScaleThresholdTypeIntention:
+			allErrs = append(allErrs, validateIntentionThreshold(t).Prefix("intentionConfig")...)
+		default:
+			allErrs = append(allErrs, errs.NewFieldInvalid("type", t.Type, "Invalid threshold type"))
+		}
+	}
+
+	return allErrs
+}
+
+// validateIntentionThreshold ensures required fields for intention based thresholds are set
+func validateIntentionThreshold(t *api.AutoScaleThreshold) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+
+	if len(t.IntentionConfig.Intent) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("intent", t.IntentionConfig.Intent))
+	}
+
+	//TODO validate value of intent
+
+	return allErrs
+}
+
+// validateValueThreshold ensures required fields for value based thresholds are set
+func validateValueThreshold(t *api.AutoScaleThreshold) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+
+	if len(t.ValueConfig.Selector) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("selector", t.ValueConfig.Selector))
+	}
+
+	if len(t.ValueConfig.Comparison) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("comparison", t.ValueConfig.Comparison))
+	}
+
+	//TODO validate value of comparison
 
 	return allErrs
 }

@@ -1306,8 +1306,44 @@ type AutoScalerSpec struct {
 
 type AutoScalerStatus struct{}
 
+// AutoScaleThresholdType is the type of threshold being used, intention or value
+type AutoScaleThresholdType string
+
+const (
+	AutoScaleThresholdTypeIntention AutoScaleThresholdType = "intention"
+	AutoScaleThresholdTypeValue AutoScaleThresholdType = "value"
+)
+
 //AutoScaleThreshold is a single statistic used to drive the auto-scaler in scaling decisions
 type AutoScaleThreshold struct {
+	// Type is the type of threshold being used, intention or value
+	Type AutoScaleThresholdType `json:"type,omitempty"`
+
+	// ValueConfig holds the config for value based thresholds
+	ValueConfig AutoScaleValueThresholdConfig `json:"valueConfig,omitempty"`
+
+	// IntentionConfig holds the config for intention based thresholds
+	IntentionConfig AutoScaleIntentionThresholdConfig `json:"intentionConfig,omitempty"`
+}
+
+// AutoScaleIntentionType is a lexicon for intentions such as "cpu-utilization", "max-rps-per-endpoint"
+type AutoScaleIntentionType string
+
+// AutoScaleIntentionThresholdConfig holds configuration for intention based thresholds
+// a intention based threshold defines no increment, the scaler will adjust by 1 accordingly and
+// maintain once the intention is reached.  Also, no selector is defined, the intention should
+// dictate the selector used for statistics.  Same for duration although we may want a configurable
+// duration later so intentions are more customizable.
+type AutoScaleIntentionThresholdConfig struct {
+	// Intent is the lexicon of what intention is requested
+	Intent AutoScaleIntentionType `json:"intent,omitempty"`
+
+	// Value is intention dependent in terms of above, below, equal and represents the value to check against
+	Value float64 `json:"value,omitempty"`
+}
+
+// AutoScaleValueThresholdConfig holds configuration for value based thresholds
+type AutoScaleValueThresholdConfig struct {
 	//Increment determines how the auot-scaler should scale up or down (positive number to scale up based on this threshold
 	//negative number to scale down by this threshold)
 	Increment int `json:"increment,omitempty"`
