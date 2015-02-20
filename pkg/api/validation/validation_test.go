@@ -2540,3 +2540,98 @@ func TestValidateSecret(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateAutoScaler(t *testing.T) {
+	validAutoScaler := func() *api.AutoScaler {
+		return &api.AutoScaler{
+			ObjectMeta: api.ObjectMeta{
+				Name: "foo",
+				Namespace: "bar",
+			},
+			Spec: api.AutoScalerSpec{
+				Target: api.ObjectReference{
+					Name: "target_name",
+					Namespace: "target_namespace",
+				},
+				MonitorSelector: map[string]string{"name": "test"},
+			},
+		}
+	}
+
+	var (
+		noMetaName = validAutoScaler()
+		noMetaNamespace = validAutoScaler()
+		noTargetName = validAutoScaler()
+		noTargetNamespace = validAutoScaler()
+		badMinMax = validAutoScaler()
+		noMonitorSelector = validAutoScaler()
+		invalidIntentThreshold = validAutoScaler()
+		invalidValueThreshold = validAutoScaler()
+		validIntentThreshold = validAutoScaler()
+		validValueThreshold = validAutoScaler()
+	)
+
+	noMetaName.ObjectMeta.Name = ""
+	noMetaNamespace.ObjectMeta.Namespace = ""
+	noTargetName.Spec.Target.Name = ""
+	noTargetNamespace.Spec.Target.Namespace = ""
+	badMinMax.Spec.MinAutoScaleCount = 1
+	badMinMax.Spec.MaxAutoScaleCount = 0
+	noMonitorSelector.Spec.MonitorSelector = make(map[string]string, 0)
+	invalidIntentThreshold.Spec.Thresholds = []api.AutoScaleThreshold{
+		api.AutoScaleThreshold {
+			Type: api.AutoScaleThresholdTypeIntention,
+			IntentionConfig: api.AutoScaleIntentionThresholdConfig {},
+		},
+	}
+	invalidValueThreshold.Spec.Thresholds = []api.AutoScaleThreshold{
+		api.AutoScaleThreshold {
+			Type: api.AutoScaleThresholdTypeValue,
+			ValueConfig: api.AutoScaleValueThresholdConfig {},
+		},
+	}
+	validIntentThreshold.Spec.Thresholds = []api.AutoScaleThreshold{
+		api.AutoScaleThreshold {
+			Type: api.AutoScaleThresholdTypeIntention,
+			IntentionConfig: api.AutoScaleIntentionThresholdConfig {
+				Intent: "test",
+			},
+		},
+	}
+	validValueThreshold.Spec.Thresholds = []api.AutoScaleThreshold{
+		api.AutoScaleThreshold {
+			Type: api.AutoScaleThresholdTypeValue,
+			ValueConfig: api.AutoScaleValueThresholdConfig {
+				Selector: map[string]string {"foo": "bar"},
+				Comparison: "foobar",
+			},
+		},
+	}
+
+
+	tests := map[string]struct {
+		errors int
+		autoScaler *api.AutoScaler
+	}{
+		"valid":{0, validAutoScaler()},
+		"noMetaName": {1, noMetaName},
+		"noMetaNamespace": {1, noMetaNamespace},
+		"noTargetName": {1, noTargetName},
+		"noTargetNamespace": {1, noTargetNamespace},
+		"badMinMax": {1, badMinMax},
+		"noMonitorSelector": {1, noMonitorSelector},
+		"invalidIntentThreshold": {1, invalidIntentThreshold},
+		"invalidValueThreshold": {2, invalidValueThreshold}, //selector & comparison
+		"validIntentThreshold": {0, validIntentThreshold},
+		"validValueThreshold": {0, validValueThreshold},
+	}
+
+
+	for testName, test := range tests {
+		result := ValidateAutoScaler(test.autoScaler)
+
+		if test.errors != len(result) {
+			t.Errorf("%s failed, expected %d errors but got %d : %v", testName, test.errors, len(result), result)
+		}
+	}
+}

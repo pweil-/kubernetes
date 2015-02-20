@@ -944,7 +944,7 @@ func ValidateNamespaceUpdate(oldNamespace *api.Namespace, namespace *api.Namespa
 // ValidateAutoScaler tests if required fields are set.
 func ValidateAutoScaler(autoScaler *api.AutoScaler) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
-	allErrs = append(allErrs, ValidateObjectMeta(&autoScaler.ObjectMeta, false, ValidateAutoScalerName).Prefix("metadata")...)
+	allErrs = append(allErrs, ValidateObjectMeta(&autoScaler.ObjectMeta, true, ValidateAutoScalerName).Prefix("metadata")...)
 	allErrs = append(allErrs, ValidateAutoScalerSpec(&autoScaler.Spec)...)
 
 	return allErrs
@@ -955,11 +955,11 @@ func ValidateAutoScalerSpec(spec *api.AutoScalerSpec) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 
 	//must have a defined target
-	if spec.Target.Name == "" {
-		allErrs = append(allErrs, errs.NewFieldRequired("target.name", ""))
+	if len(spec.Target.Name) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("target.name", spec.Target.Name))
 	}
-	if spec.Target.Namespace == "" {
-		allErrs = append(allErrs, errs.NewFieldRequired("target.namespace", ""))
+	if len(spec.Target.Namespace) == 0 {
+		allErrs = append(allErrs, errs.NewFieldRequired("target.namespace", spec.Target.Namespace))
 	}
 
 	//must have a valid set of min/max
