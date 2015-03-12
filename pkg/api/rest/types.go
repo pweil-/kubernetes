@@ -162,3 +162,30 @@ func (namespaceStrategy) Validate(obj runtime.Object) errors.ValidationErrorList
 	namespace := obj.(*api.Namespace)
 	return validation.ValidateNamespace(namespace)
 }
+
+// autoScalerStrategy implements behavior for AutoScalers
+type autoScalerStrategy struct {
+	runtime.ObjectTyper
+	api.NameGenerator
+}
+
+// AutoScalers is the default logic that applies when creating and updating AutoScalers
+// objects.
+var AutoScalers RESTCreateStrategy = autoScalerStrategy{api.Scheme, api.SimpleNameGenerator}
+
+// NamespaceScoped is true for AutoScalers.
+func (autoScalerStrategy) NamespaceScoped() bool {
+	return true
+}
+
+// ResetBeforeCreate clears fields that are not allowed to be set by end users on creation.
+func (autoScalerStrategy) ResetBeforeCreate(obj runtime.Object) {
+	autoScaler := obj.(*api.AutoScaler)
+	autoScaler.Status = api.AutoScalerStatus{}
+}
+
+// Validate validates a new AutoScalers.
+func (autoScalerStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
+	autoScaler := obj.(*api.AutoScaler)
+	return validation.ValidateAutoScaler(autoScaler)
+}

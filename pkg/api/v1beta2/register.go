@@ -62,6 +62,8 @@ func init() {
 		&NamespaceList{},
 		&Secret{},
 		&SecretList{},
+		&AutoScaler{},
+		&AutoScalerList{},
 	)
 	// Future names are supported
 	api.Scheme.AddKnownTypeWithName("v1beta2", "Node", &Minion{})
@@ -98,3 +100,5 @@ func (*Namespace) IsAnAPIObject()                 {}
 func (*NamespaceList) IsAnAPIObject()             {}
 func (*Secret) IsAnAPIObject()                    {}
 func (*SecretList) IsAnAPIObject()                {}
+func (*AutoScaler) IsAnAPIObject()                {}
+func (*AutoScalerList) IsAnAPIObject()            {}
