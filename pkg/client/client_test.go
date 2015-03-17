@@ -271,7 +271,7 @@ func TestListPodsLabels(t *testing.T) {
 	}
 	c.Setup()
 	c.QueryValidator["labels"] = validateLabels
-	selector := labels.Set{"foo": "bar", "name": "baz"}.AsSelector()
+	selector := labels.NewLabels(labels.NewLabelsFromMap(map[string]string{"foo": "bar", "name": "baz"})).AsSelector()
 	receivedPodList, err := c.Pods(ns).List(selector)
 	c.Validate(t, receivedPodList, err)
 }
@@ -563,7 +563,7 @@ func TestListServicesLabels(t *testing.T) {
 	}
 	c.Setup()
 	c.QueryValidator["labels"] = validateLabels
-	selector := labels.Set{"foo": "bar", "name": "baz"}.AsSelector()
+	selector := labels.NewLabels(labels.NewLabelsFromMap(map[string]string{"foo": "bar", "name": "baz"})).AsSelector()
 	receivedServiceList, err := c.Services(ns).List(selector)
 	c.Validate(t, receivedServiceList, err)
 }

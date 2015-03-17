@@ -29,6 +29,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/minion"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
@@ -152,14 +153,14 @@ func (rs *REST) Get(ctx api.Context, id string) (runtime.Object, error) {
 	return service, err
 }
 
-func (rs *REST) List(ctx api.Context, label labels.Selector, field fields.Selector) (runtime.Object, error) {
+func (rs *REST) List(ctx api.Context, label labeltypes.Selector, field fields.Selector) (runtime.Object, error) {
 	list, err := rs.registry.ListServices(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var filtered []api.Service
 	for _, service := range list.Items {
-		if label.Matches(labels.Set(service.Labels)) {
+		if label.Matches(labels.NewLabelsFromMap(service.Labels)) {
 			filtered = append(filtered, service)
 		}
 	}
@@ -169,7 +170,7 @@ func (rs *REST) List(ctx api.Context, label labels.Selector, field fields.Select
 
 // Watch returns Services events via a watch.Interface.
 // It implements apiserver.ResourceWatcher.
-func (rs *REST) Watch(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (rs *REST) Watch(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	return rs.registry.WatchServices(ctx, label, field, resourceVersion)
 }
 

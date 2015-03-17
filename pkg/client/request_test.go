@@ -50,7 +50,7 @@ func TestRequestWithErrorWontChange(t *testing.T) {
 	original := Request{err: errors.New("test")}
 	r := original
 	changed := r.Param("foo", "bar").
-		SelectorParam("labels", labels.Set{"a": "b"}.AsSelector()).
+		SelectorParam("labels", labels.NewLabelsFromMap(map[string]string{"a": "b"})).AsSelector()).
 		UintParam("uint", 1).
 		AbsPath("/abs").
 		Prefix("test").
@@ -673,7 +673,7 @@ func TestDoRequestNewWayReader(t *testing.T) {
 		Resource("bar").
 		Name("baz").
 		Prefix("foo").
-		SelectorParam("labels", labels.Set{"name": "foo"}.AsSelector()).
+		SelectorParam("labels", labels.NewLabelsFromMap(map[string]string{"name": "foo"}).AsSelector()).
 		Timeout(time.Second).
 		Body(bytes.NewBuffer(reqBodyExpected)).
 		Do().Get()
@@ -709,7 +709,7 @@ func TestDoRequestNewWayObj(t *testing.T) {
 		Suffix("baz").
 		Name("bar").
 		Resource("foo").
-		SelectorParam("labels", labels.Set{"name": "foo"}.AsSelector()).
+		SelectorParam("labels", labels.NewLabelsFromMap(map[string]string{"name": "foo"}).AsSelector()).
 		Timeout(time.Second).
 		Body(reqObj).
 		Do().Get()

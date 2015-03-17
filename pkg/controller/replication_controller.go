@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 	"github.com/golang/glog"
@@ -60,11 +61,11 @@ type RealPodControl struct {
 const DefaultSyncPeriod = 10 * time.Second
 
 func (r RealPodControl) createReplica(namespace string, controller api.ReplicationController) {
-	desiredLabels := make(labels.Set)
+	desiredLabels := make(labeltypes.Set)
 	for k, v := range controller.Spec.Template.Labels {
 		desiredLabels[k] = v
 	}
-	desiredAnnotations := make(labels.Set)
+	desiredAnnotations := make(labeltypes.Set)
 	for k, v := range controller.Spec.Template.Annotations {
 		desiredAnnotations[k] = v
 	}
@@ -86,7 +87,7 @@ func (r RealPodControl) createReplica(namespace string, controller api.Replicati
 		util.HandleError(fmt.Errorf("unable to convert pod template: %v", err))
 		return
 	}
-	if labels.Set(pod.Labels).AsSelector().Empty() {
+	if labels.NewLabelsFromMap(pod.Labels).AsSelector().Empty() {
 		util.HandleError(fmt.Errorf("unable to create pod replica, no labels"))
 		return
 	}
@@ -190,7 +191,7 @@ func FilterActivePods(pods []api.Pod) []api.Pod {
 }
 
 func (rm *ReplicationManager) syncReplicationController(controller api.ReplicationController) error {
-	s := labels.Set(controller.Spec.Selector).AsSelector()
+	s := labels.NewLabelsFromMap(controller.Spec.Selector).AsSelector()
 	podList, err := rm.kubeClient.Pods(controller.Namespace).List(s)
 	if err != nil {
 		return err

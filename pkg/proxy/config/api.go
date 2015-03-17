@@ -22,6 +22,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
@@ -31,14 +32,14 @@ import (
 // TODO: to use Reflector, need to change the ServicesWatcher to a generic ListerWatcher.
 // ServicesWatcher is capable of listing and watching for changes to services across ALL namespaces
 type ServicesWatcher interface {
-	List(label labels.Selector) (*api.ServiceList, error)
-	Watch(label, field labels.Selector, resourceVersion string) (watch.Interface, error)
+	List(label labeltypes.Selector) (*api.ServiceList, error)
+	Watch(label, field labeltypes.Selector, resourceVersion string) (watch.Interface, error)
 }
 
 // EndpointsWatcher is capable of listing and watching for changes to endpoints across ALL namespaces
 type EndpointsWatcher interface {
-	List(label labels.Selector) (*api.EndpointsList, error)
-	Watch(label, field labels.Selector, resourceVersion string) (watch.Interface, error)
+	List(label labeltypes.Selector) (*api.EndpointsList, error)
+	Watch(label, field labeltypes.Selector, resourceVersion string) (watch.Interface, error)
 }
 
 // SourceAPI implements a configuration source for services and endpoints that

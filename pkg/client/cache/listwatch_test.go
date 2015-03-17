@@ -96,14 +96,14 @@ func TestListWatchesCanList(t *testing.T) {
 			location:      buildLocation(buildResourcePath("", api.NamespaceAll, "pods"), buildQueryValues(api.NamespaceAll, url.Values{"fields": []string{getHostFieldLabel() + "="}})),
 			resource:      "pods",
 			namespace:     api.NamespaceAll,
-			fieldSelector: labels.Set{getHostFieldLabel(): ""}.AsSelector(),
+			fieldSelector: labels.NewLabelsFromMap(map[string]string{getHostFieldLabel(): ""}).AsSelector(),
 		},
 		// pod in namespace "foo"
 		{
 			location:      buildLocation(buildResourcePath("", "foo", "pods"), buildQueryValues("foo", url.Values{"fields": []string{getHostFieldLabel() + "="}})),
 			resource:      "pods",
 			namespace:     "foo",
-			fieldSelector: labels.Set{getHostFieldLabel(): ""}.AsSelector(),
+			fieldSelector: labels.NewLabelsFromMap(map[string]string{getHostFieldLabel(): ""}).AsSelector(),
 		},
 	}
 	for _, item := range table {
@@ -151,7 +151,7 @@ func TestListWatchesCanWatch(t *testing.T) {
 			rv:            "0",
 			resource:      "pods",
 			namespace:     api.NamespaceAll,
-			fieldSelector: labels.Set{getHostFieldLabel(): ""}.AsSelector(),
+			fieldSelector: labels.NewLabelsFromMap(map[string]string{getHostFieldLabel(): ""}).AsSelector(),
 		},
 		// pod with namespace foo and assigned field selector
 		{
@@ -159,7 +159,7 @@ func TestListWatchesCanWatch(t *testing.T) {
 			rv:            "0",
 			resource:      "pods",
 			namespace:     "foo",
-			fieldSelector: labels.Set{getHostFieldLabel(): ""}.AsSelector(),
+			fieldSelector: labels.NewLabelsFromMap(map[string]string{getHostFieldLabel(): ""}).AsSelector(),
 		},
 	}
 

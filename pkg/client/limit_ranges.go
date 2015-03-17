@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
 

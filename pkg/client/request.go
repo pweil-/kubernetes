@@ -33,6 +33,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/httpstream"
@@ -107,7 +108,7 @@ type Request struct {
 	resource     string
 	resourceName string
 	subresource  string
-	selector     labels.Selector
+	selector     labeltypes.Selector
 	timeout      time.Duration
 
 	// output
@@ -267,7 +268,7 @@ func (r *Request) ParseSelectorParam(paramName, item string) *Request {
 	var err error
 	switch paramName {
 	case "labels":
-		var lsel labels.Selector
+		var lsel labeltypes.Selector
 		if lsel, err = labels.Parse(item); err == nil {
 			selector = lsel.String()
 		}
@@ -287,7 +288,7 @@ func (r *Request) ParseSelectorParam(paramName, item string) *Request {
 }
 
 // SelectorParam adds the given selector as a query parameter with the name paramName.
-func (r *Request) SelectorParam(paramName string, s labels.Selector) *Request {
+func (r *Request) SelectorParam(paramName string, s labeltypes.Selector) *Request {
 	if r.err != nil {
 		return r
 	}

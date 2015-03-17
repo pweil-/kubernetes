@@ -301,7 +301,7 @@ func runReplicationControllerTest(c *client.Client) {
 	}
 
 	// wait for minions to indicate they have info about the desired pods
-	pods, err := c.Pods("test").List(labels.Set(updated.Spec.Selector).AsSelector())
+	pods, err := c.Pods("test").List(labels.NewLabelsFromMap(updated.Spec.Selector).AsSelector())
 	if err != nil {
 		glog.Fatalf("FAILED: unable to get pods to list: %v", err)
 	}
@@ -416,9 +416,9 @@ func runAtomicPutTest(c *client.Client) {
 		glog.Fatalf("Failed creating atomicService: %v", err)
 	}
 	glog.Info("Created atomicService")
-	testLabels := labels.Set{
+	testLabels := labels.RawLabelSet(map[string]string{
 		"foo": "bar",
-	}
+	})
 	for i := 0; i < 5; i++ {
 		// a: z, b: y, etc...
 		testLabels[string([]byte{byte('a' + i)})] = string([]byte{byte('z' - i)})
@@ -465,7 +465,7 @@ func runAtomicPutTest(c *client.Client) {
 	if err := c.Get().Resource("services").Name(svc.Name).Do().Into(&svc); err != nil {
 		glog.Fatalf("Failed getting atomicService after writers are complete: %v", err)
 	}
-	if !reflect.DeepEqual(testLabels, labels.Set(svc.Spec.Selector)) {
+	if !reflect.DeepEqual(testLabels, labels.RawLabelSet(svc.Spec.Selector)) {
 		glog.Fatalf("Selector PUTs were not atomic: wanted %v, got %v", testLabels, svc.Spec.Selector)
 	}
 	glog.Info("Atomic PUTs work.")

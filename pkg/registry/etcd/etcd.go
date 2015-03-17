@@ -23,6 +23,7 @@ import (
 	etcderr "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors/etcd"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/pod"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
@@ -94,7 +95,7 @@ func (r *Registry) ListControllers(ctx api.Context) (*api.ReplicationControllerL
 }
 
 // WatchControllers begins watching for new, changed, or deleted controllers.
-func (r *Registry) WatchControllers(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (r *Registry) WatchControllers(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	if !field.Empty() {
 		return nil, fmt.Errorf("field selectors are not supported on replication controllers")
 	}
@@ -109,9 +110,9 @@ func (r *Registry) WatchControllers(ctx api.Context, label labels.Selector, fiel
 			// Must be an error: return true to propagate to upper level.
 			return true
 		}
-		match := label.Matches(labels.Set(controller.Labels))
+		match := label.Matches(labels.NewLabelsFromMap(controller.Labels))
 		if match {
-			pods, err := r.pods.ListPods(ctx, labels.Set(controller.Spec.Selector).AsSelector())
+			pods, err := r.pods.ListPods(ctx, labels.NewLabelsFromMap(controller.Spec.Selector).AsSelector())
 			if err != nil {
 				glog.Warningf("Error listing pods: %v", err)
 				// No object that's useable so drop it on the floor
@@ -285,7 +286,7 @@ func (r *Registry) UpdateService(ctx api.Context, svc *api.Service) (*api.Servic
 }
 
 // WatchServices begins watching for new, changed, or deleted service configurations.
-func (r *Registry) WatchServices(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (r *Registry) WatchServices(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	version, err := tools.ParseWatchResourceVersion(resourceVersion, "service")
 	if err != nil {
 		return nil, err
@@ -330,7 +331,7 @@ func (r *Registry) UpdateEndpoints(ctx api.Context, endpoints *api.Endpoints) er
 }
 
 // WatchEndpoints begins watching for new, changed, or deleted endpoint configurations.
-func (r *Registry) WatchEndpoints(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (r *Registry) WatchEndpoints(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	version, err := tools.ParseWatchResourceVersion(resourceVersion, "endpoints")
 	if err != nil {
 		return nil, err
@@ -396,7 +397,7 @@ func (r *Registry) DeleteMinion(ctx api.Context, minionID string) error {
 	return nil
 }
 
-func (r *Registry) WatchMinions(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (r *Registry) WatchMinions(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	version, err := tools.ParseWatchResourceVersion(resourceVersion, "node")
 	if err != nil {
 		return nil, err
@@ -409,6 +410,6 @@ func (r *Registry) WatchMinions(ctx api.Context, label labels.Selector, field fi
 			return true
 		}
 		// TODO: Add support for filtering based on field, once NodeStatus is defined.
-		return label.Matches(labels.Set(minionObj.Labels))
+		return label.Matches(labels.NewLabelsFromMap(minionObj.Labels))
 	})
 }

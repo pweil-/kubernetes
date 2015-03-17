@@ -24,6 +24,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/generic"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
@@ -112,13 +113,13 @@ func (rs *REST) Get(ctx api.Context, id string) (runtime.Object, error) {
 	return event, err
 }
 
-func (rs *REST) getAttrs(obj runtime.Object) (objLabels labels.Set, objFields fields.Set, err error) {
+func (rs *REST) getAttrs(obj runtime.Object) (objLabels labeltypes.Labels, objFields fields.Set, err error) {
 	event, ok := obj.(*api.Event)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid object type")
 	}
 	// TODO: internal version leaks through here. This should be versioned.
-	return labels.Set{}, fields.Set{
+	return labels.EmptyLabels(), fields.Set{
 		"involvedObject.kind":            event.InvolvedObject.Kind,
 		"involvedObject.namespace":       event.InvolvedObject.Namespace,
 		"involvedObject.name":            event.InvolvedObject.Name,
@@ -131,13 +132,13 @@ func (rs *REST) getAttrs(obj runtime.Object) (objLabels labels.Set, objFields fi
 	}, nil
 }
 
-func (rs *REST) List(ctx api.Context, label labels.Selector, field fields.Selector) (runtime.Object, error) {
+func (rs *REST) List(ctx api.Context, label labeltypes.Selector, field fields.Selector) (runtime.Object, error) {
 	return rs.registry.ListPredicate(ctx, &generic.SelectionPredicate{label, field, rs.getAttrs})
 }
 
 // Watch returns Events events via a watch.Interface.
 // It implements apiserver.ResourceWatcher.
-func (rs *REST) Watch(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (rs *REST) Watch(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	return rs.registry.WatchPredicate(ctx, &generic.SelectionPredicate{label, field, rs.getAttrs}, resourceVersion)
 }
 

@@ -25,6 +25,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
@@ -68,7 +69,7 @@ func (rcStrategy) ValidateUpdate(obj, old runtime.Object) errors.ValidationError
 
 // PodLister is anything that knows how to list pods.
 type PodLister interface {
-	ListPods(ctx api.Context, labels labels.Selector) (*api.PodList, error)
+	ListPods(ctx api.Context, labels labeltypes.Selector) (*api.PodList, error)
 }
 
 // REST implements apiserver.RESTStorage for the replication controller service.
@@ -121,7 +122,7 @@ func (rs *REST) Get(ctx api.Context, id string) (runtime.Object, error) {
 }
 
 // List obtains a list of ReplicationControllers that match selector.
-func (rs *REST) List(ctx api.Context, label labels.Selector, field fields.Selector) (runtime.Object, error) {
+func (rs *REST) List(ctx api.Context, label labeltypes.Selector, field fields.Selector) (runtime.Object, error) {
 	if !field.Empty() {
 		return nil, fmt.Errorf("field selector not supported yet")
 	}
@@ -131,7 +132,7 @@ func (rs *REST) List(ctx api.Context, label labels.Selector, field fields.Select
 	}
 	filtered := []api.ReplicationController{}
 	for _, controller := range controllers.Items {
-		if label.Matches(labels.Set(controller.Labels)) {
+		if label.Matches(labels.NewLabelsFromMap(controller.Labels)) {
 			filtered = append(filtered, controller)
 		}
 	}
@@ -168,6 +169,6 @@ func (rs *REST) Update(ctx api.Context, obj runtime.Object) (runtime.Object, boo
 
 // Watch returns ReplicationController events via a watch.Interface.
 // It implements apiserver.ResourceWatcher.
-func (rs *REST) Watch(ctx api.Context, label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+func (rs *REST) Watch(ctx api.Context, label labeltypes.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	return rs.registry.WatchControllers(ctx, label, field, resourceVersion)
 }

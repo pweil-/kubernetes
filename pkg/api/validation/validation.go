@@ -769,7 +769,7 @@ func ValidateReplicationControllerUpdate(oldController, controller *api.Replicat
 func ValidateReplicationControllerSpec(spec *api.ReplicationControllerSpec) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 
-	selector := labels.Set(spec.Selector).AsSelector()
+	selector := labels.NewLabelsFromMap(spec.Selector).AsSelector()
 	if selector.Empty() {
 		allErrs = append(allErrs, errs.NewFieldRequired("selector", spec.Selector))
 	}
@@ -780,7 +780,7 @@ func ValidateReplicationControllerSpec(spec *api.ReplicationControllerSpec) errs
 	if spec.Template == nil {
 		allErrs = append(allErrs, errs.NewFieldRequired("template", spec.Template))
 	} else {
-		labels := labels.Set(spec.Template.Labels)
+		labels := labels.NewLabelsFromMap(spec.Template.Labels)
 		if !selector.Matches(labels) {
 			allErrs = append(allErrs, errs.NewFieldInvalid("template.labels", spec.Template.Labels, "selector does not match template"))
 		}

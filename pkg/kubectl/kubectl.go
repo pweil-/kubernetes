@@ -35,7 +35,7 @@ type NamespaceInfo struct {
 
 // TODO Move to labels package.
 func formatLabels(labelMap map[string]string) string {
-	l := labels.Set(labelMap).String()
+	l := labels.NewLabelsFromMap(labelMap).String()
 	if l == "" {
 		l = "<none>"
 	}

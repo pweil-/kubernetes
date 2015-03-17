@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/golang/glog"
 )
 
@@ -157,10 +158,10 @@ func (d *PodDescriber) Describe(namespace, name string) (string, error) {
 	if err != nil {
 		events, err2 := d.Events(namespace).List(
 			labels.Everything(),
-			labels.Set{
+			labels.NewLabelsFromMap(map[string]string {
 				"involvedObject.name":      name,
 				"involvedObject.namespace": namespace,
-			}.AsSelector(),
+			}).AsSelector(),
 		)
 		if err2 == nil && len(events.Items) > 0 {
 			return tabbedString(func(out io.Writer) error {
@@ -192,7 +193,7 @@ func (d *PodDescriber) Describe(namespace, name string) (string, error) {
 		fmt.Fprintf(out, "Host:\t%s\n", pod.Status.Host+"/"+pod.Status.HostIP)
 		fmt.Fprintf(out, "Labels:\t%s\n", formatLabels(pod.Labels))
 		fmt.Fprintf(out, "Status:\t%s\n", string(pod.Status.Phase))
-		fmt.Fprintf(out, "Replication Controllers:\t%s\n", getReplicationControllersForLabels(rc, labels.Set(pod.Labels)))
+		fmt.Fprintf(out, "Replication Controllers:\t%s\n", getReplicationControllersForLabels(rc, labels.NewLabelsFromMap(pod.Labels)))
 		if len(pod.Status.Conditions) > 0 {
 			fmt.Fprint(out, "Conditions:\n  Type\tStatus\n")
 			for _, c := range pod.Status.Conditions {
@@ -377,7 +378,7 @@ func describeEvents(el *api.EventList, w io.Writer) {
 // labels.
 // TODO Move this to pkg/client and ideally implement it server-side (instead
 // of getting all RC's and searching through them manually).
-func getReplicationControllersForLabels(c client.ReplicationControllerInterface, labelsToMatch labels.Labels) string {
+func getReplicationControllersForLabels(c client.ReplicationControllerInterface, labelsToMatch labeltypes.Labels) string {
 	// Get all replication controllers.
 	// TODO this needs a namespace scope as argument
 	rcs, err := c.List(labels.Everything())

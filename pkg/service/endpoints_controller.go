@@ -58,7 +58,7 @@ func (e *EndpointController) SyncServiceEndpoints() error {
 		}
 
 		glog.V(5).Infof("About to update endpoints for service %s/%s", service.Namespace, service.Name)
-		pods, err := e.client.Pods(service.Namespace).List(labels.Set(service.Spec.Selector).AsSelector())
+		pods, err := e.client.Pods(service.Namespace).List(labels.NewLabelsFromMap(service.Spec.Selector).AsSelector())
 		if err != nil {
 			glog.Errorf("Error syncing service: %s/%s, skipping", service.Namespace, service.Name)
 			resultErr = err

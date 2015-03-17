@@ -23,6 +23,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 )
 
@@ -40,7 +41,7 @@ func (*IgnoredList) IsAnAPIObject() {}
 func TestSelectionPredicate(t *testing.T) {
 	table := map[string]struct {
 		labelSelector, fieldSelector string
-		labels                       labels.Set
+		labels                       labeltypes.Set
 		fields                       fields.Set
 		err                          error
 		shouldMatch                  bool
@@ -48,21 +49,21 @@ func TestSelectionPredicate(t *testing.T) {
 		"A": {
 			labelSelector: "name=foo",
 			fieldSelector: "uid=12345",
-			labels:        labels.Set{"name": "foo"},
+			labels:        labeltypes.Set{"name": "foo"},
 			fields:        fields.Set{"uid": "12345"},
 			shouldMatch:   true,
 		},
 		"B": {
 			labelSelector: "name=foo",
 			fieldSelector: "uid=12345",
-			labels:        labels.Set{"name": "foo"},
+			labels:        labeltypes.Set{"name": "foo"},
 			fields:        fields.Set{},
 			shouldMatch:   false,
 		},
 		"C": {
 			labelSelector: "name=foo",
 			fieldSelector: "uid=12345",
-			labels:        labels.Set{},
+			labels:        labeltypes.Set{},
 			fields:        fields.Set{"uid": "12345"},
 			shouldMatch:   false,
 		},
@@ -86,7 +87,7 @@ func TestSelectionPredicate(t *testing.T) {
 		sp := &SelectionPredicate{
 			Label: parsedLabel,
 			Field: parsedField,
-			GetAttrs: func(runtime.Object) (label labels.Set, field fields.Set, err error) {
+			GetAttrs: func(runtime.Object) (label labeltypes.Set, field fields.Set, err error) {
 				return item.labels, item.fields, item.err
 			},
 		}

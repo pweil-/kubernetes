@@ -19,25 +19,36 @@ package labels
 import (
 	"sort"
 	"strings"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 )
 
-// Labels allows you to present labels independently from their storage.
-type Labels interface {
-	// Has returns whether the provided label exists.
-	Has(label string) (exists bool)
-
-	// Get returns the value for the provided label.
-	Get(label string) (value string)
+type labelSet struct {
+	types.Set
 }
 
-// Set is a map of label:value. It implements Labels.
-type Set map[string]string
+func NewLabels(s types.Set) types.Labels {
+	return labelSet{s}
+}
+
+func NewLabelsFromMap(s map[string]string) types.Labels {
+	return labelSet{types.Set(s)}
+}
+
+func EmptyLabels() types.Labels {
+	return labelSet{}
+}
+
+// used by some testing.  If you want a selector and have a raw map use
+// NewLabelsFromMap rather than chaining RawLabelSet and NewLabels together
+func RawLabelSet(s map[string]string) types.Set {
+	return types.Set(s)
+}
 
 // String returns all labels listed as a human readable string.
 // Conveniently, exactly the format that ParseSelector takes.
-func (ls Set) String() string {
-	selector := make([]string, 0, len(ls))
-	for key, value := range ls {
+func (ls labelSet) String() string {
+	selector := make([]string, 0, len(ls.Set))
+	for key, value := range ls.Set {
 		selector = append(selector, key+"="+value)
 	}
 	// Sort for determinism.
@@ -46,17 +57,17 @@ func (ls Set) String() string {
 }
 
 // Has returns whether the provided label exists in the map.
-func (ls Set) Has(label string) bool {
-	_, exists := ls[label]
+func (ls labelSet) Has(label string) bool {
+	_, exists := ls.Set[label]
 	return exists
 }
 
 // Get returns the value in the map for the provided label.
-func (ls Set) Get(label string) string {
-	return ls[label]
+func (ls labelSet) Get(label string) string {
+	return ls.Set[label]
 }
 
 // AsSelector converts labels into a selectors.
-func (ls Set) AsSelector() Selector {
-	return SelectorFromSet(ls)
+func (ls labelSet) AsSelector() types.Selector {
+	return SelectorFromSet(ls.Set)
 }

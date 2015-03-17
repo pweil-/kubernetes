@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	etcdgeneric "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/generic/etcd"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/pod"
 	podetcd "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/pod/etcd"
@@ -310,7 +311,7 @@ func TestEtcdWatchControllersMatch(t *testing.T) {
 	fakeClient.ExpectNotFoundGet(etcdgeneric.NamespaceKeyRootFunc(ctx, "/registry/pods"))
 	registry := NewTestEtcdRegistryWithPods(fakeClient)
 	watching, err := registry.WatchControllers(ctx,
-		labels.SelectorFromSet(labels.Set{"name": "foo"}),
+		labels.SelectorFromSet(labeltypes.Set{"name": "foo"}),
 		fields.Everything(),
 		"1",
 	)
@@ -351,7 +352,7 @@ func TestEtcdWatchControllersNotMatch(t *testing.T) {
 	fakeClient.ExpectNotFoundGet(etcdgeneric.NamespaceKeyRootFunc(ctx, "/registry/pods"))
 	registry := NewTestEtcdRegistryWithPods(fakeClient)
 	watching, err := registry.WatchControllers(ctx,
-		labels.SelectorFromSet(labels.Set{"name": "foo"}),
+		labels.SelectorFromSet(labeltypes.Set{"name": "foo"}),
 		fields.Everything(),
 		"1",
 	)
@@ -717,7 +718,7 @@ func TestEtcdWatchServicesBadSelector(t *testing.T) {
 
 	_, err = registry.WatchServices(
 		ctx,
-		labels.SelectorFromSet(labels.Set{"Label.Selector": "foo"}),
+		labels.SelectorFromSet(labeltypes.Set{"Label.Selector": "foo"}),
 		fields.Everything(),
 		"",
 	)
@@ -800,7 +801,7 @@ func TestEtcdWatchEndpointsBadSelector(t *testing.T) {
 
 	_, err = registry.WatchEndpoints(
 		ctx,
-		labels.SelectorFromSet(labels.Set{"Label.Selector": "foo"}),
+		labels.SelectorFromSet(labeltypes.Set{"Label.Selector": "foo"}),
 		fields.Everything(),
 		"",
 	)
@@ -953,7 +954,7 @@ func TestEtcdWatchMinionsMatch(t *testing.T) {
 	fakeClient := tools.NewFakeEtcdClient(t)
 	registry := NewTestEtcdRegistry(fakeClient)
 	watching, err := registry.WatchMinions(ctx,
-		labels.SelectorFromSet(labels.Set{"name": "foo"}),
+		labels.SelectorFromSet(labeltypes.Set{"name": "foo"}),
 		fields.Everything(),
 		"1",
 	)
@@ -993,7 +994,7 @@ func TestEtcdWatchMinionsNotMatch(t *testing.T) {
 	fakeClient := tools.NewFakeEtcdClient(t)
 	registry := NewTestEtcdRegistry(fakeClient)
 	watching, err := registry.WatchMinions(ctx,
-		labels.SelectorFromSet(labels.Set{"name": "foo"}),
+		labels.SelectorFromSet(labeltypes.Set{"name": "foo"}),
 		fields.Everything(),
 		"1",
 	)

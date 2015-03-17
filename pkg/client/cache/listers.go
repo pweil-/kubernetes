@@ -21,6 +21,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 )
 
 //  TODO: generate these classes and methods for all resources of interest using
@@ -42,10 +43,10 @@ type StoreToPodLister struct {
 // TODO Get rid of the selector because that is confusing because the user might not realize that there has already been
 // some selection at the caching stage.  Also, consistency will facilitate code generation.  However, the pkg/client
 // is inconsistent too.
-func (s *StoreToPodLister) List(selector labels.Selector) (pods []api.Pod, err error) {
+func (s *StoreToPodLister) List(selector labeltypes.Selector) (pods []api.Pod, err error) {
 	for _, m := range s.Store.List() {
 		pod := m.(*api.Pod)
-		if selector.Matches(labels.Set(pod.Labels)) {
+		if selector.Matches(labels.NewLabelsFromMap(pod.Labels)) {
 			pods = append(pods, *pod)
 		}
 	}
@@ -107,8 +108,8 @@ func (s *StoreToServiceLister) GetPodServices(pod api.Pod) (services []api.Servi
 		if service.Namespace != pod.Namespace {
 			continue
 		}
-		selector = labels.Set(service.Spec.Selector).AsSelector()
-		if selector.Matches(labels.Set(pod.Labels)) {
+		selector = labels.NewLabelsFromMap(service.Spec.Selector).AsSelector()
+		if selector.Matches(labels.NewLabelsFromMap(pod.Labels)) {
 			services = append(services, service)
 		}
 	}

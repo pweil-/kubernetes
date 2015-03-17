@@ -19,13 +19,13 @@ package generic
 import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
 
 // AttrFunc returns label and field sets for List or Watch to compare against, or an error.
-type AttrFunc func(obj runtime.Object) (label labels.Set, field fields.Set, err error)
+type AttrFunc func(obj runtime.Object) (label labels.Labels, field fields.Set, err error)
 
 // SelectionPredicate implements a generic predicate that can be passed to
 // GenericRegistry's List or Watch methods. Implements the Matcher interface.

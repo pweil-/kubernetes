@@ -23,28 +23,12 @@ import (
 	"strings"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 )
 
-// Selector represents a label selector.
-type Selector interface {
-	// Matches returns true if this selector matches the given set of labels.
-	Matches(Labels) bool
-
-	// Empty returns true if this selector does not restrict the selection space.
-	Empty() bool
-
-	// RequiresExactMatch allows a caller to introspect whether a given selector
-	// requires a single specific label to be set, and if so returns the value it
-	// requires.
-	RequiresExactMatch(label string) (value string, found bool)
-
-	// String returns a human readable string that represents this selector.
-	String() string
-}
-
 // Everything returns a selector that matches all labels.
-func Everything() Selector {
+func Everything() types.Selector {
 	return andTerm{}
 }
 
@@ -52,7 +36,7 @@ type hasTerm struct {
 	label, value string
 }
 
-func (t *hasTerm) Matches(ls Labels) bool {
+func (t *hasTerm) Matches(ls types.Labels) bool {
 	return ls.Get(t.label) == t.value
 }
 
@@ -75,7 +59,7 @@ type notHasTerm struct {
 	label, value string
 }
 
-func (t *notHasTerm) Matches(ls Labels) bool {
+func (t *notHasTerm) Matches(ls types.Labels) bool {
 	return ls.Get(t.label) != t.value
 }
 
@@ -91,9 +75,9 @@ func (t *notHasTerm) String() string {
 	return fmt.Sprintf("%v!=%v", t.label, t.value)
 }
 
-type andTerm []Selector
+type andTerm []types.Selector
 
-func (t andTerm) Matches(ls Labels) bool {
+func (t andTerm) Matches(ls types.Labels) bool {
 	for _, q := range t {
 		if !q.Matches(ls) {
 			return false
@@ -106,7 +90,7 @@ func (t andTerm) Empty() bool {
 	if t == nil {
 		return true
 	}
-	if len([]Selector(t)) == 0 {
+	if len([]types.Selector(t)) == 0 {
 		return true
 	}
 	for i := range t {
@@ -118,7 +102,7 @@ func (t andTerm) Empty() bool {
 }
 
 func (t andTerm) RequiresExactMatch(label string) (string, bool) {
-	if t == nil || len([]Selector(t)) == 0 {
+	if t == nil || len([]types.Selector(t)) == 0 {
 		return "", false
 	}
 	for i := range t {
@@ -221,7 +205,7 @@ func NewRequirement(key string, op Operator, vals util.StringSet) (*Requirement,
 //     Labels' value for that key is not in Requirement's value set.
 // (4) The operator is NotIn and Labels does not have the
 //     Requirement's key.
-func (r *Requirement) Matches(ls Labels) bool {
+func (r *Requirement) Matches(ls types.Labels) bool {
 	switch r.operator {
 	case InOperator, EqualsOperator, DoubleEqualsOperator:
 		if !ls.Has(r.key) {
@@ -301,7 +285,7 @@ func (r *Requirement) String() string {
 // Matches for a LabelSelector returns true if all
 // its Requirements match the input Labels. If any
 // Requirement does not match, false is returned.
-func (lsel LabelSelector) Matches(l Labels) bool {
+func (lsel LabelSelector) Matches(l types.Labels) bool {
 	for _, req := range lsel.Requirements {
 		if matches := req.Matches(l); !matches {
 			return false
@@ -744,7 +728,7 @@ func (p *Parser) parseExactValue() (util.StringSet, error) {
 //  (4) A requirement with just a KEY - as in "y" above - denotes that
 //      the KEY exists and can be any VALUE.
 //
-func Parse(selector string) (Selector, error) {
+func Parse(selector string) (types.Selector, error) {
 	p := &Parser{l: &Lexer{s: selector, pos: 0}}
 	items, error := p.parse()
 	if error == nil {
@@ -780,11 +764,11 @@ func try(selectorPiece, op string) (lhs, rhs string, ok bool) {
 
 // SelectorFromSet returns a Selector which will match exactly the given Set. A
 // nil Set is considered equivalent to Everything().
-func SelectorFromSet(ls Set) Selector {
+func SelectorFromSet(ls types.Set) types.Selector {
 	if ls == nil {
 		return Everything()
 	}
-	items := make([]Selector, 0, len(ls))
+	items := make([]types.Selector, 0, len(ls))
 	for label, value := range ls {
 		items = append(items, &hasTerm{label: label, value: value})
 	}
@@ -796,7 +780,7 @@ func SelectorFromSet(ls Set) Selector {
 
 // SelectorFromSet returns a Selector which will match exactly the given Set. A
 // nil Set is considered equivalent to Everything().
-func SelectorFromSetParse(ls Set) (Selector, error) {
+func SelectorFromSetParse(ls types.Set) (types.Selector, error) {
 	if ls == nil {
 		return LabelSelector{}, nil
 	}
@@ -813,7 +797,7 @@ func SelectorFromSetParse(ls Set) (Selector, error) {
 
 // ParseSelector takes a string representing a selector and returns an
 // object suitable for matching, or an error.
-func ParseSelector(selector string) (Selector, error) {
+func ParseSelector(selector string) (types.Selector, error) {
 	return parseSelector(selector,
 		func(lhs, rhs string) (newLhs, newRhs string, err error) {
 			return lhs, rhs, nil
@@ -821,17 +805,17 @@ func ParseSelector(selector string) (Selector, error) {
 }
 
 // Parses the selector and runs them through the given TransformFunc.
-func ParseAndTransformSelector(selector string, fn TransformFunc) (Selector, error) {
+func ParseAndTransformSelector(selector string, fn TransformFunc) (types.Selector, error) {
 	return parseSelector(selector, fn)
 }
 
 // Function to transform selectors.
 type TransformFunc func(label, value string) (newLabel, newValue string, err error)
 
-func parseSelector(selector string, fn TransformFunc) (Selector, error) {
+func parseSelector(selector string, fn TransformFunc) (types.Selector, error) {
 	parts := strings.Split(selector, ",")
 	sort.StringSlice(parts).Sort()
-	var items []Selector
+	var items []types.Selector
 	for _, part := range parts {
 		if part == "" {
 			continue
@@ -866,7 +850,7 @@ func parseSelector(selector string, fn TransformFunc) (Selector, error) {
 
 // OneTermEqualSelector returns an object that matches objects where one label/field equals one value.
 // Cannot return an error.
-func OneTermEqualSelector(k, v string) Selector {
+func OneTermEqualSelector(k, v string) types.Selector {
 	return &hasTerm{label: k, value: v}
 }
 
@@ -874,7 +858,7 @@ func OneTermEqualSelector(k, v string) Selector {
 // TODO: remove the original OneTermSelector  and rename OneTermEqualSelectorParse to OneTermEqualSelector
 // Since OneTermEqualSelector cannot return an error. the Requirement based version ignore error.
 // it's up to the caller being sure that k and v are not empty
-func OneTermEqualSelectorParse(k, v string) Selector {
+func OneTermEqualSelectorParse(k, v string) types.Selector {
 	r, _ := NewRequirement(k, InOperator, util.NewStringSet(v))
 	return &LabelSelector{Requirements: []Requirement{*r}}
 }

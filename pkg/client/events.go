@@ -22,6 +22,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	labeltypes "github.com/GoogleCloudPlatform/kubernetes/pkg/labels/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
@@ -35,9 +36,9 @@ type EventNamespacer interface {
 type EventInterface interface {
 	Create(event *api.Event) (*api.Event, error)
 	Update(event *api.Event) (*api.Event, error)
-	List(label, field labels.Selector) (*api.EventList, error)
+	List(label, field labeltypes.Selector) (*api.EventList, error)
 	Get(name string) (*api.Event, error)
-	Watch(label, field labels.Selector, resourceVersion string) (watch.Interface, error)
+	Watch(label, field labeltypes.Selector, resourceVersion string) (watch.Interface, error)
 	// Search finds events about the specified object
 	Search(objOrRef runtime.Object) (*api.EventList, error)
 	Delete(name string) error
@@ -96,7 +97,7 @@ func (e *events) Update(event *api.Event) (*api.Event, error) {
 }
 
 // List returns a list of events matching the selectors.
-func (e *events) List(label, field labels.Selector) (*api.EventList, error) {
+func (e *events) List(label, field labeltypes.Selector) (*api.EventList, error) {
 	result := &api.EventList{}
 	err := e.client.Get().
 		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
@@ -125,7 +126,7 @@ func (e *events) Get(name string) (*api.Event, error) {
 }
 
 // Watch starts watching for events matching the given selectors.
-func (e *events) Watch(label, field labels.Selector, resourceVersion string) (watch.Interface, error) {
+func (e *events) Watch(label, field labeltypes.Selector, resourceVersion string) (watch.Interface, error) {
 	return e.client.Get().
 		Prefix("watch").
 		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
@@ -147,7 +148,7 @@ func (e *events) Search(objOrRef runtime.Object) (*api.EventList, error) {
 	if e.namespace != "" && ref.Namespace != e.namespace {
 		return nil, fmt.Errorf("won't be able to find any events of namespace '%v' in namespace '%v'", ref.Namespace, e.namespace)
 	}
-	fields := labels.Set{}
+	fields := labeltypes.Set{}
 	if ref.Kind != "" {
 		fields["involvedObject.kind"] = ref.Kind
 	}
@@ -160,7 +161,7 @@ func (e *events) Search(objOrRef runtime.Object) (*api.EventList, error) {
 	if ref.UID != "" {
 		fields["involvedObject.uid"] = string(ref.UID)
 	}
-	return e.List(labels.Everything(), fields.AsSelector())
+	return e.List(labels.Everything(), labels.NewLabels(fields).AsSelector())
 }
 
 // Delete deletes an existing event.
