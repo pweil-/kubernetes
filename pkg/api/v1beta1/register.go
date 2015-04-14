@@ -66,6 +66,8 @@ func init() {
 		&DeleteOptions{},
 		&ListOptions{},
 		&PodLogOptions{},
+		&SecurityContext{},
+		&SecurityConstraints{},
 	)
 	// Future names are supported
 	api.Scheme.AddKnownTypeWithName("v1beta1", "Node", &Minion{})
@@ -106,3 +108,5 @@ func (*PersistentVolumeClaimList) IsAnAPIObject() {}
 func (*DeleteOptions) IsAnAPIObject()             {}
 func (*ListOptions) IsAnAPIObject()               {}
 func (*PodLogOptions) IsAnAPIObject()             {}
+func (*SecurityContext) IsAnAPIObject()           {}
+func (*SecurityConstraints) IsAnAPIObject()       {}
