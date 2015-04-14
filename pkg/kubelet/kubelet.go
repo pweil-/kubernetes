@@ -47,6 +47,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/probe"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/scheduler"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	utilErrors "github.com/GoogleCloudPlatform/kubernetes/pkg/util/errors"
@@ -122,7 +123,8 @@ func NewMainKubelet(
 	cadvisorInterface cadvisor.Interface,
 	imageGCPolicy ImageGCPolicy,
 	cloud cloudprovider.Interface,
-	nodeStatusUpdateFrequency time.Duration) (*Kubelet, error) {
+	nodeStatusUpdateFrequency time.Duration,
+	securityContextProvider securitycontext.SecurityContextProvider) (*Kubelet, error) {
 	if rootDirectory == "" {
 		return nil, fmt.Errorf("invalid root directory %q", rootDirectory)
 	}
@@ -199,7 +201,7 @@ func NewMainKubelet(
 		return nil, fmt.Errorf("failed to initialize image manager: %v", err)
 	}
 	statusManager := newStatusManager(kubeClient)
-	containerManager := dockertools.NewDockerManager(dockerClient, recorder, podInfraContainerImage, pullQPS, pullBurst)
+	containerManager := dockertools.NewDockerManager(dockerClient, recorder, podInfraContainerImage, pullQPS, pullBurst, securityContextProvider)
 
 	klet := &Kubelet{
 		hostname:               hostname,
@@ -228,6 +230,7 @@ func NewMainKubelet(
 		nodeRef:                        nodeRef,
 		containerManager:               containerManager,
 		nodeStatusUpdateFrequency:      nodeStatusUpdateFrequency,
+		securityContextProvider:        securityContextProvider,
 	}
 
 	klet.podManager = newBasicPodManager(klet.kubeClient)
@@ -358,6 +361,9 @@ type Kubelet struct {
 	//    status. Kubelet may fail to update node status reliablly if the value is too small,
 	//    as it takes time to gather all necessary node information.
 	nodeStatusUpdateFrequency time.Duration
+
+	// securityContextProvider provides the ability to manipulate the container security options before running
+	securityContextProvider securitycontext.SecurityContextProvider
 }
 
 // getRootDir returns the full path to the directory under which kubelet can
@@ -1196,8 +1202,12 @@ func (kl *Kubelet) syncPod(pod *api.Pod, mirrorPod *api.Pod, runningPod kubecont
 		}
 	}()
 
+	//apply the security context, this can be done in the api server so the kubelet can just do a check to see
+	//if the current context validates with the provider's policy (in canRunPod)
+	kl.securityContextProvider.ApplySecurityContext(pod)
+
 	// Kill pods we can't run.
-	err := canRunPod(pod)
+	err := canRunPod(pod, kl.securityContextProvider)
 	if err != nil {
 		kl.killPod(runningPod)
 		return err

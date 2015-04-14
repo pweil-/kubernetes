@@ -46,6 +46,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
@@ -102,7 +103,8 @@ type KubeletServer struct {
 	// Crash immediately, rather than eating panics.
 	ReallyCrashForTesting bool
 	// Insert a probability of random errors during calls to the master.
-	ChaosChance float64
+	ChaosChance                    float64
+	DefaultSecurityContextProvider bool
 }
 
 // bootstrapping interface for kubelet, targets the initialization protocol
@@ -200,6 +202,7 @@ func (s *KubeletServer) AddFlags(fs *pflag.FlagSet) {
 	// Flags intended for testing, not recommended used in production environments.
 	fs.BoolVar(&s.ReallyCrashForTesting, "really_crash_for_testing", s.ReallyCrashForTesting, "If true, when panics occur crash. Intended for testing.")
 	fs.Float64Var(&s.ChaosChance, "chaos_chance", s.ChaosChance, "If > 0.0, introduce random client errors and latency. Intended for testing. [default=0.0]")
+	fs.BoolVar(&s.DefaultSecurityContextProvider, "default_sc_provider", s.DefaultSecurityContextProvider, "If true, use the default security context provider. [default=false]")
 }
 
 // Run runs the specified KubeletServer.  This should never exit.
@@ -293,6 +296,10 @@ func (s *KubeletServer) Run(_ []string) error {
 		ImageGCPolicy:                  imageGCPolicy,
 		Cloud:                          cloud,
 		NodeStatusUpdateFrequency: s.NodeStatusUpdateFrequency,
+	}
+
+	if s.DefaultSecurityContextProvider {
+		kcfg.SecurityContextProvider = securitycontext.NewDefaultSecurityContextProvider()
 	}
 
 	RunKubelet(&kcfg, nil)
@@ -412,6 +419,7 @@ func SimpleKubelet(client *client.Client,
 		ImageGCPolicy:           imageGCPolicy,
 		Cloud:                   cloud,
 		NodeStatusUpdateFrequency: 10 * time.Second,
+		SecurityContextProvider:   securitycontext.NewDefaultSecurityContextProvider(),
 	}
 	return &kcfg
 }
@@ -534,6 +542,7 @@ type KubeletConfig struct {
 	ImageGCPolicy                  kubelet.ImageGCPolicy
 	Cloud                          cloudprovider.Interface
 	NodeStatusUpdateFrequency      time.Duration
+	SecurityContextProvider        securitycontext.SecurityContextProvider
 }
 
 func createAndInitKubelet(kc *KubeletConfig) (k KubeletBootstrap, pc *config.PodConfig, err error) {
@@ -576,7 +585,8 @@ func createAndInitKubelet(kc *KubeletConfig) (k KubeletBootstrap, pc *config.Pod
 		kc.CadvisorInterface,
 		kc.ImageGCPolicy,
 		kc.Cloud,
-		kc.NodeStatusUpdateFrequency)
+		kc.NodeStatusUpdateFrequency,
+		kc.SecurityContextProvider)
 
 	if err != nil {
 		return nil, nil, err

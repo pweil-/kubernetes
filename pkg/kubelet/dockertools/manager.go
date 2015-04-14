@@ -31,6 +31,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/capabilities"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/fsouza/go-dockerclient"
@@ -65,19 +66,21 @@ type DockerManager struct {
 	// use the concrete type so that we can record the pull failure and eliminate
 	// the image checking in GetPodStatus().
 	Puller DockerPuller
+	securityContextProvider securitycontext.SecurityContextProvider
 }
 
 // Ensures DockerManager implements ConatinerRunner.
 var _ kubecontainer.ContainerRunner = new(DockerManager)
 
-func NewDockerManager(client DockerInterface, recorder record.EventRecorder, podInfraContainerImage string, qps float32, burst int) *DockerManager {
+func NewDockerManager(client DockerInterface, recorder record.EventRecorder, podInfraContainerImage string, qps float32, burst int, securityContextProvider securitycontext.SecurityContextProvider) *DockerManager {
 	reasonCache := stringCache{cache: lru.New(maxReasonCacheEntries)}
 	return &DockerManager{
-		client:                 client,
-		recorder:               recorder,
-		PodInfraContainerImage: podInfraContainerImage,
-		reasonCache:            reasonCache,
-		Puller:                 newDockerPuller(client, qps, burst),
+		client:                  client,
+		recorder:                recorder,
+		PodInfraContainerImage:  podInfraContainerImage,
+		reasonCache:             reasonCache,
+		Puller:                  newDockerPuller(client, qps, burst),
+		securityContextProvider: securityContextProvider,
 	}
 }
 
@@ -441,6 +444,10 @@ func (self *DockerManager) runContainer(pod *api.Pod, container *api.Container, 
 
 	glog.V(3).Infof("Container %v/%v/%v: setting entrypoint \"%v\" and command \"%v\"", pod.Namespace, pod.Name, container.Name, dockerOpts.Config.Entrypoint, dockerOpts.Config.Cmd)
 
+	if err := self.securityContextProvider.ModifyContainerConfig(pod, container, dockerOpts.Config); err != nil {
+		return "", err
+	}
+
 	dockerContainer, err := self.client.CreateContainer(dockerOpts)
 	if err != nil {
 		if ref != nil {
@@ -494,6 +501,8 @@ func (self *DockerManager) runContainer(pod *api.Pod, container *api.Container, 
 	if len(opts.DNSSearch) > 0 {
 		hc.DNSSearch = opts.DNSSearch
 	}
+
+	self.securityContextProvider.ModifyHostConfig(pod, container, hc)
 
 	if err = self.client.StartContainer(dockerContainer.ID, hc); err != nil {
 		if ref != nil {
