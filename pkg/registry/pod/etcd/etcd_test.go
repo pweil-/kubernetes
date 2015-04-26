@@ -32,6 +32,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/pod"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 
@@ -67,6 +68,7 @@ func validNewPod() *api.Pod {
 					ImagePullPolicy: api.PullAlways,
 
 					TerminationMessagePath: api.TerminationMessagePathDefault,
+					SecurityContext:        securitycontext.ValidSecurityContextWithContainerDefaults(),
 				},
 			},
 		},
@@ -1071,8 +1073,9 @@ func TestEtcdUpdateScheduled(t *testing.T) {
 			Host: "machine",
 			Containers: []api.Container{
 				{
-					Name:  "foobar",
-					Image: "foo:v1",
+					Name:            "foobar",
+					Image:           "foo:v1",
+					SecurityContext: securitycontext.ValidSecurityContextWithContainerDefaults(),
 				},
 			},
 		},
@@ -1094,6 +1097,7 @@ func TestEtcdUpdateScheduled(t *testing.T) {
 					Image:                  "foo:v2",
 					ImagePullPolicy:        api.PullIfNotPresent,
 					TerminationMessagePath: api.TerminationMessagePathDefault,
+					SecurityContext:        securitycontext.ValidSecurityContextWithContainerDefaults(),
 				},
 			},
 			RestartPolicy: api.RestartPolicyAlways,

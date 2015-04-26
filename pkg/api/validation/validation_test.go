@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -3092,6 +3093,410 @@ func TestValidateEndpoints(t *testing.T) {
 	for k, v := range errorCases {
 		if errs := ValidateEndpoints(&v.endpoints); len(errs) == 0 || errs[0].(*errors.ValidationError).Type != v.errorType || errs[0].(*errors.ValidationError).Detail != v.errorDetail {
 			t.Errorf("Expected error type %s with detail %s for %s, got %v", v.errorType, v.errorDetail, k, errs)
+		}
+	}
+}
+
+func TestMergeSecurityContextAndContainer(t *testing.T) {
+	priv := true
+	testCases := map[string]struct {
+		container *api.Container
+		expected  *api.Container
+	}{
+		"merge container fields to nil securityContext": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+			},
+			expected: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+		"non-nil securityContext with fields set is maintained": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"baz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			expected: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"baz"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+		"merge capabilities downward - add": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Drop: []api.CapabilityType{"biz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			expected: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"biz"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+		"merge capabilities downward - drop": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add: []api.CapabilityType{"biz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			expected: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+		"merge capabilities upward - add": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"baz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			expected: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"biz"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"baz"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+		"merge capabilities upward - drop": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add: []api.CapabilityType{"bar"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"baz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			expected: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"bar"},
+					Drop: []api.CapabilityType{"baz"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"biz"},
+						Drop: []api.CapabilityType{"baz"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+	}
+	for k, v := range testCases {
+		mergeSecurityContextAndContainer(v.container)
+		if !reflect.DeepEqual(v.expected, v.container) {
+			t.Errorf("unexpected merge values for test case %s.  Expected: %#v Actual: %#v", k, v.expected, v.container)
+		}
+	}
+}
+
+func TestValidateSecurityContext(t *testing.T) {
+	priv := true
+	errorCases := map[string]struct {
+		container   *api.Container
+		errorType   fielderrors.ValidationErrorType
+		errorDetail string
+	}{
+		"conflicting privileged": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"biz"},
+				},
+				Privileged: false,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"biz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			errorType:   "FieldValueInvalid",
+			errorDetail: "securityContext.Privileged conflicts with container.Privileged",
+		},
+		"conflicting caps - add": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"biz"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"bar"},
+						Drop: []api.CapabilityType{"biz"},
+					},
+					Privileged: &priv,
+				},
+			},
+			errorType:   "FieldValueInvalid",
+			errorDetail: "securityContext.Capabilities.Add conflicts with container.Capabilities.Add",
+		},
+		"conflicting caps - drop": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"biz"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+					Privileged: &priv,
+				},
+			},
+			errorType:   "FieldValueInvalid",
+			errorDetail: "securityContext.Capabilities.Drop conflicts with container.Capabilities.Drop",
+		},
+	}
+
+	for k, v := range errorCases {
+		if errs := ValidateSecurityContext(v.container); len(errs) == 0 || errs[0].(*errors.ValidationError).Type != v.errorType || errs[0].(*errors.ValidationError).Detail != v.errorDetail {
+			t.Errorf("Expected error type %s with detail %s for %s, got %v", v.errorType, v.errorDetail, k, errs)
+		}
+	}
+
+	successCases := map[string]struct {
+		container *api.Container
+	}{
+		"valid settings all fields set": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+					Privileged: &priv,
+				},
+			},
+		},
+		"valid settings merge with nil sc": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+			},
+		},
+		"valid settings merge capabilities downward - add": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Drop: []api.CapabilityType{"bar"},
+					},
+				},
+			},
+		},
+		"valid settings merge capabilities downward - drop": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Add: []api.CapabilityType{"foo"},
+					},
+				},
+			},
+		},
+		"valid settings merge capabilities downward - both": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add:  []api.CapabilityType{"foo"},
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged:   &priv,
+					Capabilities: &api.Capabilities{},
+				},
+			},
+		},
+		"valid settings merge capabilities upward - add": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+				},
+			},
+		},
+		"valid settings merge capabilities upward - drop": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add: []api.CapabilityType{"foo"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+				},
+			},
+		},
+		"valid settings merge capabilities upward - both": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{},
+				Privileged:   true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Add:  []api.CapabilityType{"foo"},
+						Drop: []api.CapabilityType{"bar"},
+					},
+				},
+			},
+		},
+		"valid settings merge capabilities mixed - add up, drop down": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Drop: []api.CapabilityType{"bar"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Add: []api.CapabilityType{"foo"},
+					},
+				},
+			},
+		},
+		"valid settings merge capabilities mixed - drop up, add down": {
+			container: &api.Container{
+				Capabilities: api.Capabilities{
+					Add: []api.CapabilityType{"foo"},
+				},
+				Privileged: true,
+				SecurityContext: &api.SecurityContext{
+					Privileged: &priv,
+					Capabilities: &api.Capabilities{
+						Drop: []api.CapabilityType{"bar"},
+					},
+				},
+			},
+		},
+	}
+
+	for k, v := range successCases {
+		if errs := ValidateSecurityContext(v.container); len(errs) > 0 {
+			t.Errorf("Unexpected errors for %s, got %v", k, errs)
 		}
 	}
 }

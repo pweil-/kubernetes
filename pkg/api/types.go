@@ -1858,7 +1858,7 @@ type SecurityContext struct {
 
 	// Run the container in privileged mode
 	// DUPLICATE OF CONTAINER FIELD
-	Privileged bool `json:"privileged,omitempty"`
+	Privileged *bool `json:"privileged,omitempty"`
 
 	// SELinuxOptions are the labels to be applied to the container
 	// and volumes

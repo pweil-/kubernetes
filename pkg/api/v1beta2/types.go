@@ -1700,9 +1700,9 @@ type SecurityContext struct {
 	// DUPLICATE OF CONTAINER FIELD
 	Capabilities *Capabilities `json:"capabilities,omitempty"`
 
-	// Run the container in privileged mode
+	// Run the container in privileged mode.  Pointer so we can tell if it was set or not
 	// DUPLICATE OF CONTAINER FIELD
-	Privileged bool `json:"privileged,omitempty"`
+	Privileged *bool `json:"privileged,omitempty"`
 
 	// SELinuxOptions are the labels to be applied to the container
 	// and volumes
@@ -1730,4 +1730,3 @@ type SELinuxOptions struct {
 	// Disabled docker option --security-opt="label:disable"
 	Disabled bool `json:"disabled,omitempty"`
 }
-
