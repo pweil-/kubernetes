@@ -605,6 +605,8 @@ type Container struct {
 	ImagePullPolicy PullPolicy `json:"imagePullPolicy"`
 	// Optional: Capabilities for container.
 	Capabilities Capabilities `json:"capabilities,omitempty"`
+	// Optional: SecurityContext defines the security options the pod should be run with
+	SecurityContext *SecurityContext `json:"securityContext,omitempty"`
 }
 
 // Handler defines a specific action that should be taken
@@ -1843,4 +1845,44 @@ type ComponentStatusList struct {
 	ListMeta `json:"metadata,omitempty"`
 
 	Items []ComponentStatus `json:"items"`
+}
+
+// SecurityContext holds security configuration that will be applied to a container.  SecurityContext
+// contains duplication of some existing fields from the Container resource.  These duplicate fields
+// will be populated based on the Container configuration if they are not set.  Defining them on
+// both the Container AND the SecurityContext will result in an error.
+type SecurityContext struct {
+	// Capabilities are the capabilities to add/drop when running the container
+	// DUPLICATE OF CONTAINER FIELD
+	Capabilities *Capabilities `json:"capabilities,omitempty"`
+
+	// Run the container in privileged mode
+	// DUPLICATE OF CONTAINER FIELD
+	Privileged bool `json:"privileged,omitempty"`
+
+	// SELinuxOptions are the labels to be applied to the container
+	// and volumes
+	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty"`
+
+	// RunAsUser is the UID to run the entrypoint of the container process.
+	// Docker option --user or -u
+	RunAsUser *int64 `json:"runAsUser,omitempty"`
+}
+
+// SELinuxOptions are the labels to be applied to the container
+type SELinuxOptions struct {
+	// User docker option --security-opt="label:user:USER"
+	User string `json:"user,omitempty"`
+
+	// Role docker option --security-opt="label:role:ROLE"
+	Role string `json:"role,omitempty"`
+
+	// Type docker option --security-opt="label:type:TYPE"
+	Type string `json:"type,omitempty"`
+
+	// Level docker option --security-opt="label:level:LEVEL"
+	Level string `json:"level,omitempty"`
+
+	// Disabled docker option --security-opt="label:disable"
+	Disabled bool `json:"disabled,omitempty"`
 }

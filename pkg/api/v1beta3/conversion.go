@@ -816,6 +816,9 @@ func init() {
 			if err := s.Convert(&in.Lifecycle, &out.Lifecycle, 0); err != nil {
 				return err
 			}
+			if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
+				return err
+			}
 			out.TerminationMessagePath = in.TerminationMessagePath
 			out.Privileged = in.Privileged
 			out.ImagePullPolicy = newer.PullPolicy(in.ImagePullPolicy)
@@ -874,6 +877,9 @@ func init() {
 				return err
 			}
 			if err := s.Convert(&in.Lifecycle, &out.Lifecycle, 0); err != nil {
+				return err
+			}
+			if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
 				return err
 			}
 			out.TerminationMessagePath = in.TerminationMessagePath
