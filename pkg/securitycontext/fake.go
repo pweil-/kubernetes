@@ -18,12 +18,28 @@ package securitycontext
 
 import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+
+	docker "github.com/fsouza/go-dockerclient"
 )
 
+// ValidSecurityContextWithContainerDefaults creates a valid security context provider based on
+// empty container defaults.  Used for testing
 func ValidSecurityContextWithContainerDefaults() *api.SecurityContext {
 	priv := false
 	return &api.SecurityContext{
 		Capabilities: &api.Capabilities{},
 		Privileged:   &priv,
 	}
+}
+
+// NewFakeSecurityContextProvider creates a new, no-op security context provider.
+func NewFakeSecurityContextProvider() SecurityContextProvider {
+	return FakeSecurityContextProvider{}
+}
+
+type FakeSecurityContextProvider struct{}
+
+func (p FakeSecurityContextProvider) ModifyContainerConfig(pod *api.Pod, container *api.Container, config *docker.Config) {
+}
+func (p FakeSecurityContextProvider) ModifyHostConfig(pod *api.Pod, container *api.Container, hostConfig *docker.HostConfig) {
 }
