@@ -34,9 +34,11 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/capabilities"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/fsouza/go-dockerclient"
+
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/golang/glog"
 	"github.com/golang/groupcache/lru"
 )
@@ -449,6 +451,8 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 
 	glog.V(3).Infof("Container %v/%v/%v: setting entrypoint \"%v\" and command \"%v\"", pod.Namespace, pod.Name, container.Name, dockerOpts.Config.Entrypoint, dockerOpts.Config.Cmd)
 
+	securityContextProvider := securitycontext.NewSimpleSecurityContextProvider()
+	securityContextProvider.ModifyContainerConfig(pod, container, dockerOpts.Config)
 	dockerContainer, err := dm.client.CreateContainer(dockerOpts)
 	if err != nil {
 		if ref != nil {
@@ -482,7 +486,7 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 	privileged := false
 	if capabilities.Get().AllowPrivileged {
 		privileged = container.Privileged
-	} else if container.Privileged {
+	} else if container.Privileged || isSecurityContextPrivileged(container) {
 		return "", fmt.Errorf("container requested privileged mode, but it is disallowed globally.")
 	}
 
@@ -492,9 +496,11 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 		Binds:        opts.Binds,
 		NetworkMode:  opts.NetMode,
 		IpcMode:      opts.IpcMode,
-		Privileged:   privileged,
-		CapAdd:       capAdd,
-		CapDrop:      capDrop,
+		// NOTE: the settings below may be overridden by the ModifyHostConfig command if a security context
+		// is set on the container.  Container Validation should ensure that the settings match
+		Privileged: privileged,
+		CapAdd:     capAdd,
+		CapDrop:    capDrop,
 	}
 	if len(opts.DNS) > 0 {
 		hc.DNS = opts.DNS
@@ -502,6 +508,7 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 	if len(opts.DNSSearch) > 0 {
 		hc.DNSSearch = opts.DNSSearch
 	}
+	securityContextProvider.ModifyHostConfig(pod, container, hc)
 
 	if err = dm.client.StartContainer(dockerContainer.ID, hc); err != nil {
 		if ref != nil {
@@ -514,6 +521,12 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 		dm.recorder.Eventf(ref, "started", "Started with docker id %v", dockerContainer.ID)
 	}
 	return dockerContainer.ID, nil
+}
+
+func isSecurityContextPrivileged(container *api.Container) bool {
+	return container.SecurityContext != nil &&
+		container.SecurityContext.Privileged != nil &&
+		*container.SecurityContext.Privileged
 }
 
 func setEntrypointAndCommand(container *api.Container, opts *docker.CreateContainerOptions) {
@@ -559,6 +572,7 @@ func makePortsAndBindings(container *api.Container) (map[docker.Port]struct{}, m
 	return exposedPorts, portBindings
 }
 
+// TODO when security context is applied everywhere this method should be removed
 func makeCapabilites(capAdd []api.CapabilityType, capDrop []api.CapabilityType) ([]string, []string) {
 	var (
 		addCaps  []string

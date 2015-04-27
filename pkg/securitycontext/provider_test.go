@@ -1,9 +1,12 @@
 /*
 Copyright 2014 Google Inc. All rights reserved.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,10 +17,10 @@ limitations under the License.
 package securitycontext
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
-	"fmt"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 
@@ -26,21 +29,21 @@ import (
 
 func TestModifyContainerConfig(t *testing.T) {
 	var uid int64 = 1
-	testCases := map[string]struct{
+	testCases := map[string]struct {
 		securityContext *api.SecurityContext
-		expected *docker.Config
+		expected        *docker.Config
 	}{
 		"modify config, value set for user": {
-			securityContext: &api.SecurityContext {
+			securityContext: &api.SecurityContext{
 				RunAsUser: &uid,
 			},
-			expected: &docker.Config {
+			expected: &docker.Config{
 				User: strconv.FormatInt(uid, 10),
 			},
 		},
 		"modify config, nil user value": {
-			securityContext: &api.SecurityContext {},
-			expected: &docker.Config {},
+			securityContext: &api.SecurityContext{},
+			expected:        &docker.Config{},
 		},
 	}
 
@@ -81,33 +84,33 @@ func TestModifyHostConfig(t *testing.T) {
 	seLinuxLabelsSC := fullValidSecurityContext()
 	seLinuxLabelsHC := fullValidHostConfig()
 
-	testCases := map[string]struct{
+	testCases := map[string]struct {
 		securityContext *api.SecurityContext
-		expected *docker.HostConfig
+		expected        *docker.HostConfig
 	}{
 		"full settings": {
 			securityContext: fullValidSecurityContext(),
-			expected: fullValidHostConfig(),
+			expected:        fullValidHostConfig(),
 		},
 		"nil privileged": {
 			securityContext: nilPrivSC,
-			expected: nilPrivHC,
+			expected:        nilPrivHC,
 		},
 		"nil capabilities": {
 			securityContext: nilCapsSC,
-			expected: nilCapsHC,
+			expected:        nilCapsHC,
 		},
 		"nil selinux options": {
 			securityContext: nilSELinuxSC,
-			expected: nilSELinuxHC,
+			expected:        nilSELinuxHC,
 		},
 		"selinux disabled": {
 			securityContext: seLinuxDisabledSC,
-			expected: seLinuxDisabledHC,
+			expected:        seLinuxDisabledHC,
 		},
 		"selinux labels": {
 			securityContext: seLinuxLabelsSC,
-			expected: seLinuxLabelsHC,
+			expected:        seLinuxLabelsHC,
 		},
 	}
 
@@ -157,26 +160,26 @@ func TestModifySecurityOption(t *testing.T) {
 
 func fullValidSecurityContext() *api.SecurityContext {
 	priv := true
-	return &api.SecurityContext {
+	return &api.SecurityContext{
 		Privileged: &priv,
-		Capabilities: &api.Capabilities {
-			Add: []api.CapabilityType{"addCapA", "addCapB"},
+		Capabilities: &api.Capabilities{
+			Add:  []api.CapabilityType{"addCapA", "addCapB"},
 			Drop: []api.CapabilityType{"dropCapA", "dropCapB"},
 		},
-		SELinuxOptions: &api.SELinuxOptions {
-			User: "user",
-			Role: "role",
-			Type: "type",
+		SELinuxOptions: &api.SELinuxOptions{
+			User:  "user",
+			Role:  "role",
+			Type:  "type",
 			Level: "level",
 		},
 	}
 }
 
-func fullValidHostConfig() *docker.HostConfig{
+func fullValidHostConfig() *docker.HostConfig {
 	return &docker.HostConfig{
 		Privileged: true,
-		CapAdd: []string{"addCapA", "addCapB"},
-		CapDrop: []string{"dropCapA", "dropCapB"},
+		CapAdd:     []string{"addCapA", "addCapB"},
+		CapDrop:    []string{"dropCapA", "dropCapB"},
 		SecurityOpt: []string{
 			fmt.Sprintf("%s:%s", dockerLabelUser, "user"),
 			fmt.Sprintf("%s:%s", dockerLabelRole, "role"),

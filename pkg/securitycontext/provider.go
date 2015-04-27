@@ -36,6 +36,9 @@ type SimpleSecurityContextProvider struct{}
 // The security context provider can make changes to the Config with which
 // the container is created.
 func (p SimpleSecurityContextProvider) ModifyContainerConfig(pod *api.Pod, container *api.Container, config *docker.Config) {
+	if container.SecurityContext == nil {
+		return
+	}
 	if container.SecurityContext.RunAsUser != nil {
 		config.User = strconv.FormatInt(*container.SecurityContext.RunAsUser, 10)
 	}
@@ -47,6 +50,9 @@ func (p SimpleSecurityContextProvider) ModifyContainerConfig(pod *api.Pod, conta
 // An error is returned if it's not possible to secure the container as requested
 // with a security context.
 func (p SimpleSecurityContextProvider) ModifyHostConfig(pod *api.Pod, container *api.Container, hostConfig *docker.HostConfig) {
+	if container.SecurityContext == nil {
+		return
+	}
 	if container.SecurityContext.Privileged != nil {
 		hostConfig.Privileged = *container.SecurityContext.Privileged
 	}
