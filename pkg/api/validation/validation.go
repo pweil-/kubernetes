@@ -742,7 +742,7 @@ func validateContainers(containers []api.Container, volumes util.StringSet) errs
 		cErrs = append(cErrs, validatePullPolicy(&ctr).Prefix("pullPolicy")...)
 		cErrs = append(cErrs, ValidateResourceRequirements(&ctr.Resources).Prefix("resources")...)
 		// getting a pointer here because security context validation merges configuration items
-		cErrs = append(cErrs, ValidateSecurityContext(&containers[i])...)
+		cErrs = append(cErrs, ValidateSecurityContext(&containers[i]).Prefix("securityContext")...)
 		allErrs = append(allErrs, cErrs.PrefixIndex(i)...)
 	}
 	// Check for colliding ports across all containers.
@@ -1408,13 +1408,32 @@ func ValidateSecurityContext(container *api.Container) errs.ValidationErrorList 
 	mergeSecurityContextAndContainer(container)
 	sc := container.SecurityContext
 	if container.Privileged != *sc.Privileged {
-		allErrs = append(allErrs, errs.NewFieldInvalid("securityContext.Privileged", *sc.Privileged, "securityContext.Privileged conflicts with container.Privileged"))
+		allErrs = append(allErrs, errs.NewFieldInvalid("privileged", *sc.Privileged, "privileged conflicts with container.privileged"))
 	}
 	if !reflect.DeepEqual(sc.Capabilities.Add, container.Capabilities.Add) {
-		allErrs = append(allErrs, errs.NewFieldInvalid("securityContext.Capabilities.Add", sc.Capabilities.Add, "securityContext.Capabilities.Add conflicts with container.Capabilities.Add"))
+		allErrs = append(allErrs, errs.NewFieldInvalid("capabilities.add", sc.Capabilities.Add, "capabilities.add conflicts with container.capabilities.add"))
 	}
 	if !reflect.DeepEqual(sc.Capabilities.Drop, container.Capabilities.Drop) {
-		allErrs = append(allErrs, errs.NewFieldInvalid("securityContext.Capabilities.Drop", sc.Capabilities.Drop, "securityContext.Capabilities.Drop conflicts with container.Capabilities.Drop"))
+		allErrs = append(allErrs, errs.NewFieldInvalid("capabilities.drop", sc.Capabilities.Drop, "capabilities.drop conflicts with container.capabilities.drop"))
+	}
+	if sc.SELinuxOptions != nil {
+		allErrs = append(allErrs, validateSELinuxOptions(sc.SELinuxOptions).Prefix("seLinuxOptions")...)
+	}
+	if sc.RunAsUser != nil {
+		if *sc.RunAsUser < 0 {
+			allErrs = append(allErrs, errs.NewFieldInvalid("runAsUser", *sc.RunAsUser, "runAsUser cannot be negative"))
+		}
+	}
+	return allErrs
+}
+
+// validateSELinux ensures that the disable and label options are not mixed
+func validateSELinuxOptions(seLinux *api.SELinuxOptions) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	if seLinux.Disabled {
+		if len(seLinux.Level) > 0 || len(seLinux.Role) > 0 || len(seLinux.Type) > 0 || len(seLinux.User) > 0 {
+			allErrs = append(allErrs, errs.NewFieldInvalid("disabled", seLinux.Disabled, "cannot set disabled and labels"))
+		}
 	}
 	return allErrs
 }

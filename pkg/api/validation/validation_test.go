@@ -3283,6 +3283,8 @@ func TestMergeSecurityContextAndContainer(t *testing.T) {
 
 func TestValidateSecurityContext(t *testing.T) {
 	priv := true
+	var invalidRunAsUser int64 = -1
+	var validRunAsUser int64 = 1
 	errorCases := map[string]struct {
 		container   *api.Container
 		errorType   fielderrors.ValidationErrorType
@@ -3304,7 +3306,7 @@ func TestValidateSecurityContext(t *testing.T) {
 				},
 			},
 			errorType:   "FieldValueInvalid",
-			errorDetail: "securityContext.Privileged conflicts with container.Privileged",
+			errorDetail: "privileged conflicts with container.privileged",
 		},
 		"conflicting caps - add": {
 			container: &api.Container{
@@ -3322,7 +3324,7 @@ func TestValidateSecurityContext(t *testing.T) {
 				},
 			},
 			errorType:   "FieldValueInvalid",
-			errorDetail: "securityContext.Capabilities.Add conflicts with container.Capabilities.Add",
+			errorDetail: "capabilities.add conflicts with container.capabilities.add",
 		},
 		"conflicting caps - drop": {
 			container: &api.Container{
@@ -3340,7 +3342,28 @@ func TestValidateSecurityContext(t *testing.T) {
 				},
 			},
 			errorType:   "FieldValueInvalid",
-			errorDetail: "securityContext.Capabilities.Drop conflicts with container.Capabilities.Drop",
+			errorDetail: "capabilities.drop conflicts with container.capabilities.drop",
+		},
+		"negative run as user": {
+			container: &api.Container{
+				SecurityContext: &api.SecurityContext{
+					RunAsUser: &invalidRunAsUser,
+				},
+			},
+			errorType:   "FieldValueInvalid",
+			errorDetail: "runAsUser cannot be negative",
+		},
+		"conflicting SELinux options": {
+			container: &api.Container{
+				SecurityContext: &api.SecurityContext{
+					SELinuxOptions: &api.SELinuxOptions{
+						Disabled: true,
+						User:     "user",
+					},
+				},
+			},
+			errorType:   "FieldValueInvalid",
+			errorDetail: "cannot set disabled and labels",
 		},
 	}
 
@@ -3366,6 +3389,13 @@ func TestValidateSecurityContext(t *testing.T) {
 						Drop: []api.CapabilityType{"bar"},
 					},
 					Privileged: &priv,
+					RunAsUser:  &validRunAsUser,
+					SELinuxOptions: &api.SELinuxOptions{
+						User:  "user",
+						Role:  "role",
+						Type:  "type",
+						Level: "level",
+					},
 				},
 			},
 		},
