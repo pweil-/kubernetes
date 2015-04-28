@@ -340,3 +340,45 @@ func TestSetDefaultObjectFieldSelectorAPIVersion(t *testing.T) {
 		t.Errorf("Expected default APIVersion v1beta1, got: %v", apiVersion)
 	}
 }
+
+func TestSetDefaultSecurityContext(t *testing.T) {
+	container := current.Container{
+		Privileged: true,
+		Capabilities: current.Capabilities{
+			Add:  []current.CapabilityType{"foo"},
+			Drop: []current.CapabilityType{"bar"},
+		},
+	}
+	pod := &current.Pod{
+		DesiredState: current.PodState{
+			Manifest: current.ContainerManifest{
+				Containers: []current.Container{container},
+			},
+		},
+	}
+
+	obj := roundTrip(t, runtime.Object(pod))
+	defaultedPod := obj.(*current.Pod)
+	c := defaultedPod.DesiredState.Manifest.Containers[0]
+
+	if c.SecurityContext == nil {
+		t.Fatalf("Expected SecurityContext to be populated from container settings")
+	}
+	if c.SecurityContext.Privileged == nil {
+		t.Errorf("Expected SecurityContext.Privileged to be populated from container settings")
+	}
+	if c.SecurityContext.Privileged != nil && *c.SecurityContext.Privileged != container.Privileged {
+		t.Errorf("The defaulted SecurityContext.Privileged value did not match the container value")
+	}
+	if c.SecurityContext.Capabilities == nil {
+		t.Errorf("Expected SecurityContext.Capabilities to be populated from container settings")
+	}
+	if c.SecurityContext.Capabilities != nil {
+		if !reflect.DeepEqual(container.Capabilities.Add, c.Capabilities.Add) {
+			t.Errorf("The defaulted SecurityContext.Capabilities.Add did not match the container settings")
+		}
+		if !reflect.DeepEqual(container.Capabilities.Drop, c.Capabilities.Drop) {
+			t.Errorf("The defaulted SecurityContext.Capabilities.Drop did not match the container settings")
+		}
+	}
+}

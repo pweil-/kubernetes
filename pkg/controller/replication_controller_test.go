@@ -33,6 +33,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/testclient"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
@@ -79,6 +80,7 @@ func newReplicationController(replicas int) api.ReplicationController {
 							Image: "foo/bar",
 							TerminationMessagePath: api.TerminationMessagePathDefault,
 							ImagePullPolicy:        api.PullIfNotPresent,
+							SecurityContext:        securitycontext.ValidSecurityContextWithContainerDefaults(),
 						},
 					},
 					RestartPolicy: api.RestartPolicyAlways,
