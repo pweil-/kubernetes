@@ -66,6 +66,7 @@ func init() {
 			if obj.TerminationMessagePath == "" {
 				obj.TerminationMessagePath = TerminationMessagePathDefault
 			}
+			defaultSecurityContext(obj)
 		},
 		func(obj *ServiceSpec) {
 			if obj.SessionAffinity == "" {
@@ -154,5 +155,17 @@ func defaultHostNetworkPorts(containers *[]Container) {
 				(*containers)[i].Ports[j].HostPort = (*containers)[i].Ports[j].ContainerPort
 			}
 		}
+	}
+}
+
+func defaultSecurityContext(container *Container) {
+	if container.SecurityContext == nil {
+		container.SecurityContext = &SecurityContext{}
+	}
+	if container.SecurityContext.Capabilities == nil {
+		container.SecurityContext.Capabilities = &container.Capabilities
+	}
+	if container.SecurityContext.Privileged == nil {
+		container.SecurityContext.Privileged = &container.Privileged
 	}
 }
