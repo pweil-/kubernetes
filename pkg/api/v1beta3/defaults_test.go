@@ -302,3 +302,43 @@ func TestSetDefaultNodeExternalID(t *testing.T) {
 		t.Errorf("Expected default External ID: %s, got: %s", name, n2.Spec.ExternalID)
 	}
 }
+
+func TestSetDefaultSecurityContext(t *testing.T) {
+	container := current.Container{
+		Privileged: true,
+		Capabilities: current.Capabilities {
+			Add: []current.CapabilityType{"foo"},
+			Drop: []current.CapabilityType{"bar"},
+		},
+	}
+	pod := &current.Pod {
+		Spec: current.PodSpec{
+			Containers: []current.Container{container},
+		},
+	}
+
+	obj := roundTrip(t, runtime.Object(pod))
+	defaultedPod := obj.(*current.Pod)
+	c := defaultedPod.Spec.Containers[0]
+
+	if c.SecurityContext == nil {
+		t.Fatalf("Expected SecurityContext to be populated from container settings")
+	}
+	if c.SecurityContext.Privileged == nil {
+		t.Errorf("Expected SecurityContext.Privileged to be populated from container settings")
+	}
+	if c.SecurityContext.Privileged != nil && *c.SecurityContext.Privileged != container.Privileged{
+		t.Errorf("The defaulted SecurityContext.Privileged value did not match the container value")
+	}
+	if c.SecurityContext.Capabilities == nil {
+		t.Errorf("Expected SecurityContext.Capabilities to be populated from container settings")
+	}
+	if c.SecurityContext.Capabilities != nil {
+		if !reflect.DeepEqual(container.Capabilities.Add, c.Capabilities.Add) {
+			t.Errorf("The defaulted SecurityContext.Capabilities.Add did not match the container settings")
+		}
+		if !reflect.DeepEqual(container.Capabilities.Drop, c.Capabilities.Drop) {
+			t.Errorf("The defaulted SecurityContext.Capabilities.Drop did not match the container settings")
+		}
+	}
+}

@@ -570,17 +570,20 @@ func init() {
 			if err := s.Convert(&in.TerminationMessagePath, &out.TerminationMessagePath, 0); err != nil {
 				return err
 			}
-			if err := s.Convert(&in.Privileged, &out.Privileged, 0); err != nil {
-				return err
-			}
 			if err := s.Convert(&in.ImagePullPolicy, &out.ImagePullPolicy, 0); err != nil {
-				return err
-			}
-			if err := s.Convert(&in.Capabilities, &out.Capabilities, 0); err != nil {
 				return err
 			}
 			if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
 				return err
+			}
+			// now that we've converted set the container field from security context
+			if out.SecurityContext != nil && out.SecurityContext.Privileged != nil {
+				out.Privileged = *out.SecurityContext.Privileged
+			}
+			out.ImagePullPolicy = PullPolicy(in.ImagePullPolicy)
+			// now that we've converted set the container field from security context
+			if out.SecurityContext != nil && out.SecurityContext.Capabilities != nil {
+				out.Capabilities = *out.SecurityContext.Capabilities
 			}
 			return nil
 		},
@@ -659,13 +662,7 @@ func init() {
 			if err := s.Convert(&in.TerminationMessagePath, &out.TerminationMessagePath, 0); err != nil {
 				return err
 			}
-			if err := s.Convert(&in.Privileged, &out.Privileged, 0); err != nil {
-				return err
-			}
 			if err := s.Convert(&in.ImagePullPolicy, &out.ImagePullPolicy, 0); err != nil {
-				return err
-			}
-			if err := s.Convert(&in.Capabilities, &out.Capabilities, 0); err != nil {
 				return err
 			}
 			if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
