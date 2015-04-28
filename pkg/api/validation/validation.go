@@ -1241,6 +1241,15 @@ func ValidateSecret(secret *api.Secret) errs.ValidationErrorList {
 	}
 
 	switch secret.Type {
+	case api.SecretTypeServiceAccountToken:
+		// Only require Annotations[serviceAccountName]
+		// Additional fields (like Annotations[serviceAccountUID] and Data[token]) might be contributed later by a controller loop
+		if secret.Annotations == nil {
+			secret.Annotations = map[string]string{}
+		}
+		if value, ok := secret.Annotations[api.ServiceAccountNameKey]; !ok || len(value) == 0 {
+			allErrs = append(allErrs, errs.NewFieldRequired(fmt.Sprintf("metadata.annotations[%s]", api.ServiceAccountNameKey)))
+		}
 	case api.SecretTypeOpaque, "":
 		// no-op
 	default:
