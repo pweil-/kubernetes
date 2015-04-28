@@ -816,14 +816,35 @@ func init() {
 			if err := s.Convert(&in.Lifecycle, &out.Lifecycle, 0); err != nil {
 				return err
 			}
+			out.TerminationMessagePath = in.TerminationMessagePath
+			out.ImagePullPolicy = newer.PullPolicy(in.ImagePullPolicy)
+			// in will always have a securityContext set by the defaulting functions
+			out.SecurityContext = &newer.SecurityContext{}
 			if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
 				return err
 			}
-			out.TerminationMessagePath = in.TerminationMessagePath
-			out.Privileged = in.Privileged
-			out.ImagePullPolicy = newer.PullPolicy(in.ImagePullPolicy)
+
+			return nil
+		},
+		func(in *SecurityContext, out *newer.SecurityContext, s conversion.Scope) error {
+			// this is always set by the defaulting functions, no nil check needed
+			out.Capabilities = &newer.Capabilities{}
 			if err := s.Convert(&in.Capabilities, &out.Capabilities, 0); err != nil {
 				return err
+			}
+			// this is always set by the defaulting functions, no nil check needed
+			priv := *out.Privileged
+			out.Privileged = &priv
+
+			if in.SELinuxOptions != nil {
+				out.SELinuxOptions = &newer.SELinuxOptions{}
+				if err := s.Convert(&in.SELinuxOptions, &out.SELinuxOptions, 0); err != nil {
+					return err
+				}
+			}
+			if in.RunAsUser != nil {
+				i := *in.RunAsUser
+				out.RunAsUser = &i
 			}
 			return nil
 		},
@@ -879,16 +900,49 @@ func init() {
 			if err := s.Convert(&in.Lifecycle, &out.Lifecycle, 0); err != nil {
 				return err
 			}
-			if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
-				return err
+			if in.SecurityContext != nil {
+				out.SecurityContext = &SecurityContext{}
+				if err := s.Convert(&in.SecurityContext, &out.SecurityContext, 0); err != nil {
+					return err
+				}
 			}
 			out.TerminationMessagePath = in.TerminationMessagePath
-			out.Privileged = in.Privileged
+			// now that we've converted set the container field from security context
+			if out.SecurityContext != nil && out.SecurityContext.Privileged != nil {
+				out.Privileged = *out.SecurityContext.Privileged
+			}
 			out.ImagePullPolicy = PullPolicy(in.ImagePullPolicy)
-			if err := s.Convert(&in.Capabilities, &out.Capabilities, 0); err != nil {
-				return err
+			// now that we've converted set the container field from security context
+			if out.SecurityContext != nil && out.SecurityContext.Capabilities != nil {
+				out.Capabilities = &out.SecurityContext.Capabilities
 			}
 			return nil
+		},
+		func (in *newer.SecurityContext, out *SecurityContext, s conversion.Scope) error {
+			if in.Privileged != nil {
+				priv := *in.Privileged
+				out.Privileged = &priv
+			}
+			if in.Capabilities != nil {
+				out.Capabilities = &Capabilities{}
+				if err := s.Convert(&in.Capabilities, &out.Capabilities, 0); err != nil {
+					return err
+				}
+			}
+			if in.SELinuxOptions != nil {
+				out.SELinuxOptions = &SELinuxOptions{}
+				if err := s.Convert(&in.SELinuxOptions, &out.SELinuxOptions, 0); err != nil {
+					return err
+				}
+			}
+			if in.RunAsUser != nil {
+				i := *in.RunAsUser
+				out.RunAsUser = &i
+			}
+			return nil
+		},
+		func (in *newer.SecurityContext, out *Container, s conversion.Scope) error {
+
 		},
 		func(in *ContainerStateWaiting, out *newer.ContainerStateWaiting, s conversion.Scope) error {
 			out.Reason = in.Reason
