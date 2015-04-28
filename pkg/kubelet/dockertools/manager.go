@@ -483,24 +483,15 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 		}
 	}
 
-	privileged := false
-	if capabilities.Get().AllowPrivileged {
-		privileged = container.Privileged
-	} else if container.Privileged || isSecurityContextPrivileged(container) {
+	if !capabilities.Get().AllowPrivileged && *container.SecurityContext.Privileged{
 		return "", fmt.Errorf("container requested privileged mode, but it is disallowed globally.")
 	}
 
-	capAdd, capDrop := makeCapabilites(container.Capabilities.Add, container.Capabilities.Drop)
 	hc := &docker.HostConfig{
 		PortBindings: portBindings,
 		Binds:        opts.Binds,
 		NetworkMode:  opts.NetMode,
 		IpcMode:      opts.IpcMode,
-		// NOTE: the settings below may be overridden by the ModifyHostConfig command if a security context
-		// is set on the container.  Container Validation should ensure that the settings match
-		Privileged: privileged,
-		CapAdd:     capAdd,
-		CapDrop:    capDrop,
 	}
 	if len(opts.DNS) > 0 {
 		hc.DNS = opts.DNS
@@ -521,12 +512,6 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 		dm.recorder.Eventf(ref, "started", "Started with docker id %v", dockerContainer.ID)
 	}
 	return dockerContainer.ID, nil
-}
-
-func isSecurityContextPrivileged(container *api.Container) bool {
-	return container.SecurityContext != nil &&
-		container.SecurityContext.Privileged != nil &&
-		*container.SecurityContext.Privileged
 }
 
 func setEntrypointAndCommand(container *api.Container, opts *docker.CreateContainerOptions) {
@@ -572,20 +557,6 @@ func makePortsAndBindings(container *api.Container) (map[docker.Port]struct{}, m
 	return exposedPorts, portBindings
 }
 
-// TODO when security context is applied everywhere this method should be removed
-func makeCapabilites(capAdd []api.CapabilityType, capDrop []api.CapabilityType) ([]string, []string) {
-	var (
-		addCaps  []string
-		dropCaps []string
-	)
-	for _, cap := range capAdd {
-		addCaps = append(addCaps, string(cap))
-	}
-	for _, cap := range capDrop {
-		dropCaps = append(dropCaps, string(cap))
-	}
-	return addCaps, dropCaps
-}
 
 func (dm *DockerManager) GetPods(all bool) ([]*kubecontainer.Pod, error) {
 	pods := make(map[types.UID]*kubecontainer.Pod)

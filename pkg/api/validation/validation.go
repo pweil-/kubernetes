@@ -716,15 +716,12 @@ func validateContainers(containers []api.Container, volumes util.StringSet) errs
 	allNames := util.StringSet{}
 	for i, ctr := range containers {
 		cErrs := errs.ValidationErrorList{}
-		capabilities := capabilities.Get()
 		if len(ctr.Name) == 0 {
 			cErrs = append(cErrs, errs.NewFieldRequired("name"))
 		} else if !util.IsDNS1123Label(ctr.Name) {
 			cErrs = append(cErrs, errs.NewFieldInvalid("name", ctr.Name, dns1123LabelErrorMsg))
 		} else if allNames.Has(ctr.Name) {
 			cErrs = append(cErrs, errs.NewFieldDuplicate("name", ctr.Name))
-		} else if ctr.Privileged && !capabilities.AllowPrivileged {
-			cErrs = append(cErrs, errs.NewFieldForbidden("privileged", ctr.Privileged))
 		} else {
 			allNames.Insert(ctr.Name)
 		}
@@ -742,7 +739,7 @@ func validateContainers(containers []api.Container, volumes util.StringSet) errs
 		cErrs = append(cErrs, validatePullPolicy(&ctr).Prefix("pullPolicy")...)
 		cErrs = append(cErrs, ValidateResourceRequirements(&ctr.Resources).Prefix("resources")...)
 		// getting a pointer here because security context validation merges configuration items
-		cErrs = append(cErrs, ValidateSecurityContext(&containers[i]).Prefix("securityContext")...)
+		cErrs = append(cErrs, ValidateSecurityContext(ctr.SecurityContext).Prefix("securityContext")...)
 		allErrs = append(allErrs, cErrs.PrefixIndex(i)...)
 	}
 	// Check for colliding ports across all containers.
@@ -1403,19 +1400,13 @@ func ValidateEndpointsUpdate(oldEndpoints, newEndpoints *api.Endpoints) errs.Val
 
 // ValidateSecurityContext tests to make sure that a security context is set and that the settings
 // in the security context do not conflict with settings on the container.
-func ValidateSecurityContext(container *api.Container) errs.ValidationErrorList {
+func ValidateSecurityContext(sc *api.SecurityContext) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
-	mergeSecurityContextAndContainer(container)
-	sc := container.SecurityContext
-	if container.Privileged != *sc.Privileged {
-		allErrs = append(allErrs, errs.NewFieldInvalid("privileged", *sc.Privileged, "privileged conflicts with container.privileged"))
+
+	if *sc.Privileged && !capabilities.Get().AllowPrivileged {
+		allErrs = append(allErrs, errs.NewFieldForbidden("privileged", sc.Privileged))
 	}
-	if !reflect.DeepEqual(sc.Capabilities.Add, container.Capabilities.Add) {
-		allErrs = append(allErrs, errs.NewFieldInvalid("capabilities.add", sc.Capabilities.Add, "capabilities.add conflicts with container.capabilities.add"))
-	}
-	if !reflect.DeepEqual(sc.Capabilities.Drop, container.Capabilities.Drop) {
-		allErrs = append(allErrs, errs.NewFieldInvalid("capabilities.drop", sc.Capabilities.Drop, "capabilities.drop conflicts with container.capabilities.drop"))
-	}
+
 	if sc.SELinuxOptions != nil {
 		allErrs = append(allErrs, validateSELinuxOptions(sc.SELinuxOptions).Prefix("seLinuxOptions")...)
 	}
@@ -1436,54 +1427,4 @@ func validateSELinuxOptions(seLinux *api.SELinuxOptions) errs.ValidationErrorLis
 		}
 	}
 	return allErrs
-}
-
-// mergeSecurityContextAndContainer performs a merge of the settings that exist on both the container
-// and the securitycontext.  This includes the Privileged field and Capabilities field
-// merge rules are:
-// 1.  if the container has no security context then create one and use all settings from the container
-// 2.  if the container has a security context but no capabilities defined then create one and use
-//		all capability settings from the container
-// 3.  if the security context has capabilities defined merge upwards or downwards by merging a non-zero
-//		length add/drop field into a zero length add/drop field.
-// 4.  if the privileged setting is not defined on the security context then use the container setting
-func mergeSecurityContextAndContainer(container *api.Container) {
-	if container == nil {
-		return
-	}
-	//if there is no security context then create one and default it to the values on the container
-	if container.SecurityContext == nil {
-		container.SecurityContext = &api.SecurityContext{
-			Capabilities: &container.Capabilities,
-			Privileged:   &container.Privileged,
-		}
-		return
-	}
-	//downward merge from container.Capabilies -> container.SecurityContext.Capabilities
-	if container.SecurityContext.Capabilities == nil {
-		container.SecurityContext.Capabilities = &api.Capabilities{
-			Add:  container.Capabilities.Add,
-			Drop: container.Capabilities.Drop,
-		}
-	} else {
-		//upward merge from container.SecurityContext.Capabilities.Add -> container.Capabilities.Add
-		if len(container.Capabilities.Add) == 0 && len(container.SecurityContext.Capabilities.Add) > 0 {
-			container.Capabilities.Add = container.SecurityContext.Capabilities.Add
-		}
-		//upward merge from container.SecurityContext.Capabilities.Drop -> container.Capabilities.Drop
-		if len(container.Capabilities.Drop) == 0 && len(container.SecurityContext.Capabilities.Drop) > 0 {
-			container.Capabilities.Drop = container.SecurityContext.Capabilities.Drop
-		}
-		//downward merge from container.Capabilities.Add -> container.SecurityContext.Capabilities.Add
-		if len(container.SecurityContext.Capabilities.Add) == 0 && len(container.Capabilities.Add) > 0 {
-			container.SecurityContext.Capabilities.Add = container.Capabilities.Add
-		}
-		//downward merge from container.Capabilities.Drop -> container.SecurityContext.Capabilities.Drop
-		if len(container.SecurityContext.Capabilities.Drop) == 0 && len(container.Capabilities.Drop) > 0 {
-			container.SecurityContext.Capabilities.Drop = container.Capabilities.Drop
-		}
-	}
-	if container.SecurityContext.Privileged == nil {
-		container.SecurityContext.Privileged = &container.Privileged
-	}
 }
