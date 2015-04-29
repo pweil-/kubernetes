@@ -517,7 +517,7 @@ type Container struct {
 	// Optional: Capabilities for container.
 	Capabilities Capabilities `json:"capabilities,omitempty" description:"capabilities for container; cannot be updated"`
 	// Optional: SecurityContext defines the security options the pod should be run with
-	SecurityContext *SecurityContext `json:"securityContext,omitempty"`
+	SecurityContext *SecurityContext `json:"securityContext,omitempty" description:"security options the pod should run with"`
 }
 
 const (
@@ -1716,36 +1716,36 @@ type ComponentStatusList struct {
 // both the Container AND the SecurityContext will result in an error.
 type SecurityContext struct {
 	// Capabilities are the capabilities to add/drop when running the container
-	// DUPLICATE OF CONTAINER FIELD
-	Capabilities *Capabilities `json:"capabilities,omitempty"`
+	// Must match Container.Capabilities or be unset.  Will be defaulted to Container.Capabilities if left unset
+	Capabilities *Capabilities `json:"capabilities,omitempty" description:"the linux capabilites that should be added or removed"`
 
-	// Run the container in privileged mode.  Pointer so we can tell if it was set or not
-	// DUPLICATE OF CONTAINER FIELD
-	Privileged *bool `json:"privileged,omitempty"`
+	// Run the container in privileged mode
+	// Must match Container.Privileged or be unset.  Will be defaulted to Container.Privileged if left unset
+	Privileged *bool `json:"privileged,omitempty" description:"run the container in privileged mode"`
 
 	// SELinuxOptions are the labels to be applied to the container
 	// and volumes
-	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty"`
+	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty" description:"options that control the SELinux labels applied"`
 
 	// RunAsUser is the UID to run the entrypoint of the container process.
 	// Docker option --user or -u
-	RunAsUser *int64 `json:"runAsUser,omitempty"`
+	RunAsUser *int64 `json:"runAsUser,omitempty" description:"the user id that runs the first process in the container"`
 }
 
 // SELinuxOptions are the labels to be applied to the container
 type SELinuxOptions struct {
-	// User docker option --security-opt="label:user:USER"
-	User string `json:"user,omitempty"`
+	// SELinux user label
+	User string `json:"user,omitempty" description:"the user label to apply to the container"`
 
-	// Role docker option --security-opt="label:role:ROLE"
-	Role string `json:"role,omitempty"`
+	// SELinux role label
+	Role string `json:"role,omitempty" description:"the role label to apply to the container"`
 
-	// Type docker option --security-opt="label:type:TYPE"
-	Type string `json:"type,omitempty"`
+	// SELinux type label
+	Type string `json:"type,omitempty" description:"the type label to apply to the container"`
 
-	// Level docker option --security-opt="label:level:LEVEL"
-	Level string `json:"level,omitempty"`
+	// SELinux level label.
+	Level string `json:"level,omitempty" description:"the level label to apply to the container"`
 
 	// Disabled docker option --security-opt="label:disable"
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled,omitempty" description:"turn off label confinement for the container"`
 }
