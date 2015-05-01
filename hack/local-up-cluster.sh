@@ -132,12 +132,19 @@ trap cleanup EXIT
 echo "Starting etcd"
 kube::etcd::start
 
+# Make public/private key for ServiceAccount token generation and verification
+openssl genrsa -out /tmp/serviceaccount.private.key 2048
+openssl rsa -in /tmp/serviceaccount.private.key -outform PEM -out /tmp/serviceaccount.public.key -pubout
+SERVICE_ACCOUNT_LOOKUP=${SERVICE_ACCOUNT_LOOKUP:-false}
+
 # Admission Controllers to invoke prior to persisting objects in cluster
 ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
 
 APISERVER_LOG=/tmp/kube-apiserver.log
 sudo -E "${GO_OUT}/kube-apiserver" \
   --v=${LOG_LEVEL} \
+  --service-account-public-key-file="/tmp/serviceaccount.public.key" \
+  --service-account-lookup="${SERVICE_ACCOUNT_LOOKUP}" \
   --admission_control="${ADMISSION_CONTROL}" \
   --address="${API_HOST}" \
   --port="${API_PORT}" \
@@ -155,6 +162,7 @@ CTLRMGR_LOG=/tmp/kube-controller-manager.log
 sudo -E "${GO_OUT}/kube-controller-manager" \
   --v=${LOG_LEVEL} \
   --machines="127.0.0.1" \
+  --service-account-private-key="/tmp/serviceaccount.private.key" \
   --master="${API_HOST}:${API_PORT}" >"${CTLRMGR_LOG}" 2>&1 &
 CTLRMGR_PID=$!
 
