@@ -897,11 +897,16 @@ type ServicePort struct {
 // * a name, understood by users, and perhaps by peripheral systems, for an identity
 // * a principal that can be authenticated and authorized
 // * a set of secrets
+// * security context constraints
 type ServiceAccount struct {
 	TypeMeta `json:",inline"`
 
 	// Secrets is the list of secrets allowed to be used by pods running using this ServiceAccount
 	Secrets []ObjectReference `json:"secrets" description:"list of secrets that can be used by pods running as this service account" patchStrategy:"merge" patchMergeKey:"name"`
+
+	// SecurityContextConstraints governs the ability to make requests that affect the SecurityContext that will
+	// be applied to a container.
+	SecurityContextConstraints *SecurityContextConstraints `json:"securityContextConstraints,omitempty" description:"constraints that the security context for containers must follow"`
 }
 
 // ServiceAccountList is a list of ServiceAccount objects
@@ -1801,3 +1806,67 @@ type SELinuxOptions struct {
 	// SELinux level label.
 	Level string `json:"level,omitempty" description:"the level label to apply to the container"`
 }
+
+// SecurityContextConstraints governs the ability to make requests that affect the SecurityContext that will
+// be applied to a container.
+type SecurityContextConstraints struct {
+	// AllowPrivilegedContainer determines if a container can request to be run as privileged.
+	AllowPrivilegedContainer bool `json:"allowPrivilegedContainer,omitempty" description:"does the policy allow containers to run as privileged"`
+	// HostNetworkSources is a list of pod sources that are allowed to request to run in the host's
+	// network namespace.
+	HostNetworkSources []string `json:"hostNetworkSources,omitempty" description:"list of pod sources that are allowed to request to run in the host's network namespace"`
+	// AllowedCapabilities is a list of capabilities that can be requested to add to the container.
+	AllowedCapabilities []CapabilityType `json:"allowedCapabilities,omitempty" description:"the set of capabilities that can be requested to add to the container"`
+	// SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
+	SELinuxContext SELinuxContextStrategy `json:"SELinuxContext,omitempty" description:"the strategy that will apply labels to the container"`
+	// AllowHostDirVolumePlugin determines if the policy allow containers to use the HostDir volume plugin
+	AllowHostDirVolumePlugin bool `json:"allowHostDirVolumePlugin,omitempty" description:"does the policy allow containers to use the HostDir volume plugin"`
+	// RunAsUser  is the strategy that will dictate what RunAsUser is used in the SecurityContext.
+	RunAsUser RunAsUserStrategy `json:"runAsUser,omitempty" description:"the strategy that will determine the UID to run pid 0 in the container"`
+}
+
+// SELinuxContextStrategy provides configuration options for all SELinuxContextStrategy that can be used
+// in a SecurityContextConstraints.
+type SELinuxContextStrategy struct {
+	// StrategyType is the SELinuxContextStrategyType being configured.
+	StrategyType SELinuxContextStrategyType `json:"type,omitempty" description:"the type of strategy"`
+
+	// SELinuxOptions are the specific SELinux labels to apply.  Required for SELinuxStrategyMustRunAs.
+	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty" description:"specific SELinux labels to apply"`
+}
+
+// RunAsUserStrategy provides configuration options for all RunAsUserStrategy that can be used
+// in a SecurityContextConstraints.
+type RunAsUserStrategy struct {
+	// StrategyType is the RunAsUserStrategyType being configured.
+	StrategyType RunAsUserStrategyType `json:"type,omitempty" description:"the type of strategy"`
+
+	// UID is a specific uid that will run pid 0 in the container.  Required for type RunAsUserStrategyMustRunAs.
+	UID *int64 `json:"uid,omitempty" description:"the user id that runs the first process in the container"`
+}
+
+// SELinuxContextStrategyType defines different strategies that can be used when determining
+// the SELinux labels to be applied to the container.
+type SELinuxContextStrategyType string
+
+// RunAsUserStrategyType defines different strategies that can be used when determining
+// the uid that pid 1 will run as in the container.
+type RunAsUserStrategyType string
+
+const (
+	// container must have SELinux labels of X applied.
+	SELinuxStrategyMustRunAs SELinuxContextStrategyType = "MustRunAs"
+	// container may make requests for any SELinux context labels.
+	SELinuxStrategyRunAsAny SELinuxContextStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	SELinuxStrategyRunAsDefault SELinuxContextStrategyType = "RunAsDefault"
+
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAs RunAsUserStrategyType = "MustRunAs"
+	// container must run as a non-root uid
+	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategyType = "MustRunAsNonRoot"
+	// container may make requests for any uid.
+	RunAsUserStrategyRunAsAny RunAsUserStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	RunAsUserStrategyRunAsDefault RunAsUserStrategyType = "RunAsDefault"
+)

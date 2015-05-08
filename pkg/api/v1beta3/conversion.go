@@ -2400,6 +2400,40 @@ func convert_api_ResourceRequirements_To_v1beta3_ResourceRequirements(in *newer.
 	return nil
 }
 
+func convert_v1beta3_RunAsUserStrategy_To_api_RunAsUserStrategy(in *RunAsUserStrategy, out *newer.RunAsUserStrategy, s conversion.Scope) error {
+	out.StrategyType = newer.RunAsUserStrategyType(in.StrategyType)
+	if in.UID != nil {
+		out.UID = new(int64)
+		*out.UID = *in.UID
+	}
+	return nil
+}
+
+func convert_api_RunAsUserStrategy_To_v1beta3_RunAsUserStrategy(in *newer.RunAsUserStrategy, out *RunAsUserStrategy, s conversion.Scope) error {
+	out.StrategyType = RunAsUserStrategyType(in.StrategyType)
+	if in.UID != nil {
+		out.UID = new(int64)
+		*out.UID = *in.UID
+	}
+	return nil
+}
+
+func convert_v1beta3_SELinuxContextStrategy_To_api_SELinuxContextStrategy(in *SELinuxContextStrategy, out *newer.SELinuxContextStrategy, s conversion.Scope) error {
+	out.StrategyType = newer.SELinuxContextStrategyType(in.StrategyType)
+	if err := s.Convert(&in.SELinuxOptions, &out.SELinuxOptions, 0); err != nil {
+		return err
+	}
+	return nil
+}
+
+func convert_api_SELinuxContextStrategy_To_v1beta3_SELinuxContextStrategy(in *newer.SELinuxContextStrategy, out *SELinuxContextStrategy, s conversion.Scope) error {
+	out.StrategyType = SELinuxContextStrategyType(in.StrategyType)
+	if err := s.Convert(&in.SELinuxOptions, &out.SELinuxOptions, 0); err != nil {
+		return err
+	}
+	return nil
+}
+
 func convert_api_SELinuxOptions_To_v1beta3_SELinuxOptions(in *newer.SELinuxOptions, out *SELinuxOptions, s conversion.Scope) error {
 	out.User = in.User
 	out.Role = in.Role
@@ -2540,6 +2574,54 @@ func convert_v1beta3_SecurityContext_To_api_SecurityContext(in *SecurityContext,
 	return nil
 }
 
+func convert_v1beta3_SecurityContextConstraints_To_api_SecurityContextConstraints(in *SecurityContextConstraints, out *newer.SecurityContextConstraints, s conversion.Scope) error {
+	out.AllowPrivilegedContainer = in.AllowPrivilegedContainer
+	if in.HostNetworkSources != nil {
+		out.HostNetworkSources = make([]string, len(in.HostNetworkSources))
+		for i := range in.HostNetworkSources {
+			out.HostNetworkSources[i] = in.HostNetworkSources[i]
+		}
+	}
+	if in.AllowedCapabilities != nil {
+		out.AllowedCapabilities = make([]newer.CapabilityType, len(in.AllowedCapabilities))
+		for i := range in.AllowedCapabilities {
+			out.AllowedCapabilities[i] = newer.CapabilityType(in.AllowedCapabilities[i])
+		}
+	}
+	if err := s.Convert(&in.SELinuxContext, &out.SELinuxContext, 0); err != nil {
+		return err
+	}
+	out.AllowHostDirVolumePlugin = in.AllowHostDirVolumePlugin
+	if err := s.Convert(&in.RunAsUser, &out.RunAsUser, 0); err != nil {
+		return err
+	}
+	return nil
+}
+
+func convert_api_SecurityContextConstraints_To_v1beta3_SecurityContextConstraints(in *newer.SecurityContextConstraints, out *SecurityContextConstraints, s conversion.Scope) error {
+	out.AllowPrivilegedContainer = in.AllowPrivilegedContainer
+	if in.HostNetworkSources != nil {
+		out.HostNetworkSources = make([]string, len(in.HostNetworkSources))
+		for i := range in.HostNetworkSources {
+			out.HostNetworkSources[i] = in.HostNetworkSources[i]
+		}
+	}
+	if in.AllowedCapabilities != nil {
+		out.AllowedCapabilities = make([]CapabilityType, len(in.AllowedCapabilities))
+		for i := range in.AllowedCapabilities {
+			out.AllowedCapabilities[i] = CapabilityType(in.AllowedCapabilities[i])
+		}
+	}
+	if err := s.Convert(&in.SELinuxContext, &out.SELinuxContext, 0); err != nil {
+		return err
+	}
+	out.AllowHostDirVolumePlugin = in.AllowHostDirVolumePlugin
+	if err := s.Convert(&in.RunAsUser, &out.RunAsUser, 0); err != nil {
+		return err
+	}
+	return nil
+}
+
 func convert_v1beta3_SerializedReference_To_api_SerializedReference(in *SerializedReference, out *newer.SerializedReference, s conversion.Scope) error {
 	if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
 		return err
@@ -2607,6 +2689,9 @@ func convert_v1beta3_ServiceAccount_To_api_ServiceAccount(in *ServiceAccount, ou
 			}
 		}
 	}
+	if err := s.Convert(&in.SecurityContextConstraints, &out.SecurityContextConstraints, 0); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2624,6 +2709,9 @@ func convert_api_ServiceAccount_To_v1beta3_ServiceAccount(in *newer.ServiceAccou
 				return err
 			}
 		}
+	}
+	if err := s.Convert(&in.SecurityContextConstraints, &out.SecurityContextConstraints, 0); err != nil {
+		return err
 	}
 	return nil
 }
@@ -3074,10 +3162,13 @@ func init() {
 		convert_api_ResourceQuotaStatus_To_v1beta3_ResourceQuotaStatus,
 		convert_api_ResourceQuota_To_v1beta3_ResourceQuota,
 		convert_api_ResourceRequirements_To_v1beta3_ResourceRequirements,
+		convert_api_RunAsUserStrategy_To_v1beta3_RunAsUserStrategy,
+		convert_api_SELinuxContextStrategy_To_v1beta3_SELinuxContextStrategy,
 		convert_api_SELinuxOptions_To_v1beta3_SELinuxOptions,
 		convert_api_SecretList_To_v1beta3_SecretList,
 		convert_api_SecretVolumeSource_To_v1beta3_SecretVolumeSource,
 		convert_api_Secret_To_v1beta3_Secret,
+		convert_api_SecurityContextConstraints_To_v1beta3_SecurityContextConstraints,
 		convert_api_SecurityContext_To_v1beta3_SecurityContext,
 		convert_api_SerializedReference_To_v1beta3_SerializedReference,
 		convert_api_ServiceAccountList_To_v1beta3_ServiceAccountList,
@@ -3181,10 +3272,13 @@ func init() {
 		convert_v1beta3_ResourceQuotaStatus_To_api_ResourceQuotaStatus,
 		convert_v1beta3_ResourceQuota_To_api_ResourceQuota,
 		convert_v1beta3_ResourceRequirements_To_api_ResourceRequirements,
+		convert_v1beta3_RunAsUserStrategy_To_api_RunAsUserStrategy,
+		convert_v1beta3_SELinuxContextStrategy_To_api_SELinuxContextStrategy,
 		convert_v1beta3_SELinuxOptions_To_api_SELinuxOptions,
 		convert_v1beta3_SecretList_To_api_SecretList,
 		convert_v1beta3_SecretVolumeSource_To_api_SecretVolumeSource,
 		convert_v1beta3_Secret_To_api_Secret,
+		convert_v1beta3_SecurityContextConstraints_To_api_SecurityContextConstraints,
 		convert_v1beta3_SecurityContext_To_api_SecurityContext,
 		convert_v1beta3_SerializedReference_To_api_SerializedReference,
 		convert_v1beta3_ServiceAccountList_To_api_ServiceAccountList,
