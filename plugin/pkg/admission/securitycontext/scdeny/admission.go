@@ -24,22 +24,34 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	apierrors "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext/constraints/provider"
+	"encoding/json"
 )
 
 func init() {
 	admission.RegisterPlugin("SecurityContextDeny", func(client client.Interface, config io.Reader) (admission.Interface, error) {
-		return NewSecurityContextDeny(client), nil
+		cfg, err := readConfig(config)
+		if err != nil {
+			return nil, err
+		}
+		return NewSecurityContextDeny(client, cfg.namespace, cfg.name)
 	})
 }
 
 // plugin contains the client used by the SecurityContextDeny admission controller
 type plugin struct {
-	client client.Interface
+	client      client.Interface
+	saNamespace string
+	saName      string
 }
 
 // NewSecurityContextDeny creates a new instance of the SecurityContextDeny admission controller
-func NewSecurityContextDeny(client client.Interface) admission.Interface {
-	return &plugin{client}
+func NewSecurityContextDeny(client client.Interface, defaultServiceAccountNamespace, defaultServiceAccountName string) (admission.Interface, error) {
+	return &plugin{
+		client:      client,
+		saNamespace: defaultServiceAccountNamespace,
+		saName: defaultServiceAccountName,
+	}, nil
 }
 
 // Admit will deny any SecurityContext that defines options that were not previously available in the api.Container
@@ -56,15 +68,48 @@ func (p *plugin) Admit(a admission.Attributes) (err error) {
 	if !ok {
 		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 	}
-	for _, v := range pod.Spec.Containers {
-		if v.SecurityContext != nil {
-			if v.SecurityContext.SELinuxOptions != nil {
-				return apierrors.NewForbidden(a.GetResource(), pod.Name, fmt.Errorf("SecurityContext.SELinuxOptions is forbidden"))
-			}
-			if v.SecurityContext.RunAsUser != nil {
-				return apierrors.NewForbidden(a.GetResource(), pod.Name, fmt.Errorf("SecurityContext.RunAsUser is forbidden"))
-			}
+
+	defaultServiceAccount, err := p.client.ServiceAccounts(p.saNamespace).Get(p.saName)
+	if err != nil {
+		return err
+	}
+	clusterConstraints := defaultServiceAccount.SecurityContextConstraints
+	sccProvider := provider.NewSimpleSecurityProvider(p.client, clusterConstraints)
+
+	// if the pod is making any security context requests then we will validate it against the
+	// policy.  Otherwise we'll add a security context to every container
+	shouldValidate := false
+	for _, c := range pod.Spec.Containers {
+		if c.SecurityContext != nil {
+			shouldValidate = true
+		}
+	}
+
+	if shouldValidate {
+		errs := sccProvider.ValidateAgainstConstraints(pod)
+		if errs != nil {
+			return fmt.Errorf("Pod failed to validate against the security context constraints: %#v", errs)
+		}
+	} else {
+		for idx, c := range pod.Spec.Containers {
+			pod.Spec.Containers[idx].SecurityContext = sccProvider.CreateContextForContainer(pod, &c)
+		}
+		errs := sccProvider.ValidateAgainstConstraints(pod)
+		if errs != nil {
+			return fmt.Errorf("Pod failed to validate against the security context constraints: %#v", errs)
 		}
 	}
 	return nil
+}
+
+// TODO this is assuming that it is the only thing configured in the file which is W-R-O-N-G
+type config struct {
+	namespace, name string
+}
+
+func readConfig(r io.Reader) (config, error) {
+	decoder := json.NewDecoder(r)
+	cfg := config{}
+	err := decoder.Decode(&cfg)
+	return cfg, err
 }
