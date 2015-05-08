@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ func runControllerManager(machineList []string, cl *client.Client, nodeMilliCPU,
 
 	const nodeSyncPeriod = 10 * time.Second
 	nodeController := nodecontroller.NewNodeController(
-		nil, "", machineList, nodeResources, cl, 10, 5*time.Minute, util.NewTokenBucketRateLimiter(*deletingPodsQps, *deletingPodsBurst), 40*time.Second, 60*time.Second, 5*time.Second, "")
+		nil, "", machineList, nodeResources, cl, 10, 5*time.Minute, util.NewTokenBucketRateLimiter(*deletingPodsQps, *deletingPodsBurst), 40*time.Second, 60*time.Second, 5*time.Second, "", "", false)
 	nodeController.Run(nodeSyncPeriod, true)
 
 	serviceController := servicecontroller.New(nil, cl, "kubernetes")

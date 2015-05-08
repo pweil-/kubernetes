@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -263,7 +263,7 @@ func getDockerEndpoint(dockerEndpoint string) string {
 func ConnectToDockerOrDie(dockerEndpoint string) DockerInterface {
 	if dockerEndpoint == "fake://" {
 		return &FakeDockerClient{
-			VersionInfo: []string{"apiVersion=1.16"},
+			VersionInfo: docker.Env{"ApiVersion=1.16"},
 		}
 	}
 	client, err := docker.NewClient(getDockerEndpoint(dockerEndpoint))

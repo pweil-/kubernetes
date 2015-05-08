@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,21 +17,23 @@ limitations under the License.
 package controller
 
 import (
-	"encoding/json"
 	"fmt"
+
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/cache"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
 	"github.com/golang/glog"
 	"sync/atomic"
-	"time"
 )
 
-const CreatedByAnnotation = "kubernetes.io/created-by"
+const (
+	CreatedByAnnotation = "kubernetes.io/created-by"
+	updateRetries       = 1
+)
 
 // Expectations are a way for replication controllers to tell the rc manager what they expect. eg:
 //	RCExpectations: {
@@ -106,7 +108,9 @@ func (r *RCExpectations) setExpectations(rc *api.ReplicationController, add, del
 	if err != nil {
 		return err
 	}
-	return r.Add(&PodExpectations{add: int64(add), del: int64(del), key: rcKey})
+	podExp := &PodExpectations{add: int64(add), del: int64(del), key: rcKey}
+	glog.V(4).Infof("Setting expectations %+v", podExp)
+	return r.Add(podExp)
 }
 
 func (r *RCExpectations) ExpectCreations(rc *api.ReplicationController, adds int) error {
@@ -124,6 +128,8 @@ func (r *RCExpectations) lowerExpectations(rc *api.ReplicationController, add, d
 			glog.V(2).Infof("Controller has both add and del expectations %+v", podExp)
 		}
 		podExp.Seen(int64(add), int64(del))
+		// The expectations might've been modified since the update on the previous line.
+		glog.V(4).Infof("Lowering expectations %+v", podExp)
 	}
 }
 
@@ -195,8 +201,9 @@ func (r RealPodControl) createReplica(namespace string, controller *api.Replicat
 	if err != nil {
 		return fmt.Errorf("unable to get controller reference: %v", err)
 	}
-	// TODO: Version this serialization per #7322
-	createdByRefJson, err := json.Marshal(createdByRef)
+	createdByRefJson, err := latest.Codec.Encode(&api.SerializedReference{
+		Reference: *createdByRef,
+	})
 	if err != nil {
 		return fmt.Errorf("unable to serialize controller reference: %v", err)
 	}
@@ -271,21 +278,28 @@ func filterActivePods(pods []api.Pod) []*api.Pod {
 	return result
 }
 
-// updateReplicaCount attempts to update the Status.Replicas of the given controller, with retries.
-// Note that the controller pointer might contain a more recent version of the same controller passed into the function.
-func updateReplicaCount(rcClient client.ReplicationControllerInterface, controller *api.ReplicationController, numReplicas int) error {
-	return wait.Poll(10*time.Millisecond, 100*time.Millisecond, func() (bool, error) {
-		if controller.Status.Replicas != numReplicas {
-			glog.V(4).Infof("Updating replica count for rc: %v, %d->%d", controller.Name, controller.Status.Replicas, numReplicas)
-			controller.Status.Replicas = numReplicas
-			_, err := rcClient.Update(controller)
-			if err != nil {
-				glog.V(2).Infof("Controller %v failed to update replica count: %v", controller.Name, err)
-				// Update the controller with the latest resource version for the next poll
-				controller, _ = rcClient.Get(controller.Name)
-				return false, err
-			}
+// updateReplicaCount attempts to update the Status.Replicas of the given controller, with a single GET/PUT retry.
+func updateReplicaCount(rcClient client.ReplicationControllerInterface, controller api.ReplicationController, numReplicas int) (updateErr error) {
+	// This is the steady state. It happens when the rc doesn't have any expectations, since
+	// we do a periodic relist every 30s.
+	if controller.Status.Replicas == numReplicas {
+		return nil
+	}
+	var getErr error
+	glog.V(4).Infof("Updating replica count for rc: %v, %d->%d", controller.Name, controller.Status.Replicas, numReplicas)
+	for i, rc := 0, &controller; ; i++ {
+		rc.Status.Replicas = numReplicas
+		_, updateErr = rcClient.Update(rc)
+		if updateErr == nil || i >= updateRetries {
+			return updateErr
 		}
-		return true, nil
-	})
+		// Update the controller with the latest resource version for the next poll
+		if rc, getErr = rcClient.Get(controller.Name); getErr != nil {
+			// If the GET fails we can't trust status.Replicas anymore. This error
+			// is bound to be more interesting than the update failure.
+			return getErr
+		}
+	}
+	// Failed 2 updates one of which was with the latest controller, return the update error
+	return
 }

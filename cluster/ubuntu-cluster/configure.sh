@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2015 Google Inc. All rights reserved.
+# Copyright 2015 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,12 @@
 # author @WIZARD-CXY @resouer
 
 set -e
+
+
+# get the full path of configure dir and set $PWD to it.
+CONFIG_DIR=`dirname "$0"`
+CONFIG_DIR=`cd "$CONFIG_DIR"; pwd`
+cd $CONFIG_DIR
 
 #clean all init/init.d/configs
 function do_backup_clean() {
@@ -92,7 +98,7 @@ function cpMinion(){
     # copy default configs
     cp work/default_scripts/etcd /etc/default/
     cp work/default_scripts/flanneld /etc/default/
-    cp work/default_scripts/kube-proxy /etc/default
+    cp work/default_scripts/kube-proxy /etc/default/
     cp work/default_scripts/kubelet /etc/default/
 }
 

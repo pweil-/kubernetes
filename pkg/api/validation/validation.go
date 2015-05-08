@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -150,6 +150,13 @@ func ValidateResourceQuotaName(name string, prefix bool) (bool, string) {
 // Prefix indicates this name will be used as part of generation, in which case
 // trailing dashes are allowed.
 func ValidateSecretName(name string, prefix bool) (bool, string) {
+	return nameIsDNSSubdomain(name, prefix)
+}
+
+// ValidateServiceAccountName can be used to check whether the given service account name is valid.
+// Prefix indicates this name will be used as part of generation, in which case
+// trailing dashes are allowed.
+func ValidateServiceAccountName(name string, prefix bool) (bool, string) {
 	return nameIsDNSSubdomain(name, prefix)
 }
 
@@ -591,9 +598,9 @@ func validateEnvVarValueFrom(ev api.EnvVar) errs.ValidationErrorList {
 	numSources := 0
 
 	switch {
-	case ev.ValueFrom.FieldPath != nil:
+	case ev.ValueFrom.FieldRef != nil:
 		numSources++
-		allErrs = append(allErrs, validateObjectFieldSelector(ev.ValueFrom.FieldPath).Prefix("fieldPath")...)
+		allErrs = append(allErrs, validateObjectFieldSelector(ev.ValueFrom.FieldRef).Prefix("fieldRef")...)
 	}
 
 	if ev.Value != "" && numSources != 0 {
@@ -776,15 +783,12 @@ func validateContainers(containers []api.Container, volumes util.StringSet) errs
 	allNames := util.StringSet{}
 	for i, ctr := range containers {
 		cErrs := errs.ValidationErrorList{}
-		capabilities := capabilities.Get()
 		if len(ctr.Name) == 0 {
 			cErrs = append(cErrs, errs.NewFieldRequired("name"))
 		} else if !util.IsDNS1123Label(ctr.Name) {
 			cErrs = append(cErrs, errs.NewFieldInvalid("name", ctr.Name, dns1123LabelErrorMsg))
 		} else if allNames.Has(ctr.Name) {
 			cErrs = append(cErrs, errs.NewFieldDuplicate("name", ctr.Name))
-		} else if ctr.Privileged && !capabilities.AllowPrivileged {
-			cErrs = append(cErrs, errs.NewFieldForbidden("privileged", ctr.Privileged))
 		} else {
 			allNames.Insert(ctr.Name)
 		}
@@ -801,6 +805,7 @@ func validateContainers(containers []api.Container, volumes util.StringSet) errs
 		cErrs = append(cErrs, validateVolumeMounts(ctr.VolumeMounts, volumes).Prefix("volumeMounts")...)
 		cErrs = append(cErrs, validatePullPolicy(&ctr).Prefix("pullPolicy")...)
 		cErrs = append(cErrs, ValidateResourceRequirements(&ctr.Resources).Prefix("resources")...)
+		cErrs = append(cErrs, ValidateSecurityContext(ctr.SecurityContext).Prefix("securityContext")...)
 		allErrs = append(allErrs, cErrs.PrefixIndex(i)...)
 	}
 	// Check for colliding ports across all containers.
@@ -1224,6 +1229,21 @@ func ValidateLimitRange(limitRange *api.LimitRange) errs.ValidationErrorList {
 	return allErrs
 }
 
+// ValidateServiceAccount tests if required fields in the ServiceAccount are set.
+func ValidateServiceAccount(serviceAccount *api.ServiceAccount) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	allErrs = append(allErrs, ValidateObjectMeta(&serviceAccount.ObjectMeta, true, ValidateServiceAccountName).Prefix("metadata")...)
+	return allErrs
+}
+
+// ValidateServiceAccountUpdate tests if required fields in the ServiceAccount are set.
+func ValidateServiceAccountUpdate(oldServiceAccount, newServiceAccount *api.ServiceAccount) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	allErrs = append(allErrs, ValidateObjectMetaUpdate(&oldServiceAccount.ObjectMeta, &newServiceAccount.ObjectMeta).Prefix("metadata")...)
+	allErrs = append(allErrs, ValidateServiceAccount(newServiceAccount)...)
+	return allErrs
+}
+
 // ValidateSecret tests if required fields in the Secret are set.
 func ValidateSecret(secret *api.Secret) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
@@ -1243,6 +1263,15 @@ func ValidateSecret(secret *api.Secret) errs.ValidationErrorList {
 	}
 
 	switch secret.Type {
+	case api.SecretTypeServiceAccountToken:
+		// Only require Annotations[serviceAccountName]
+		// Additional fields (like Annotations[serviceAccountUID] and Data[token]) might be contributed later by a controller loop
+		if secret.Annotations == nil {
+			secret.Annotations = map[string]string{}
+		}
+		if value, ok := secret.Annotations[api.ServiceAccountNameKey]; !ok || len(value) == 0 {
+			allErrs = append(allErrs, errs.NewFieldRequired(fmt.Sprintf("metadata.annotations[%s]", api.ServiceAccountNameKey)))
+		}
 	case api.SecretTypeOpaque, "":
 		// no-op
 	default:
@@ -1479,5 +1508,27 @@ func ValidateEndpointsUpdate(oldEndpoints, newEndpoints *api.Endpoints) errs.Val
 	allErrs := errs.ValidationErrorList{}
 	allErrs = append(allErrs, ValidateObjectMetaUpdate(&oldEndpoints.ObjectMeta, &newEndpoints.ObjectMeta).Prefix("metadata")...)
 	allErrs = append(allErrs, validateEndpointSubsets(newEndpoints.Subsets).Prefix("subsets")...)
+	return allErrs
+}
+
+// ValidateSecurityContext ensure the security context contains valid settings
+func ValidateSecurityContext(sc *api.SecurityContext) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	//this should only be true for testing since SecurityContext is defaulted by the api
+	if sc == nil {
+		return allErrs
+	}
+
+	if sc.Privileged != nil {
+		if *sc.Privileged && !capabilities.Get().AllowPrivileged {
+			allErrs = append(allErrs, errs.NewFieldForbidden("privileged", sc.Privileged))
+		}
+	}
+
+	if sc.RunAsUser != nil {
+		if *sc.RunAsUser < 0 {
+			allErrs = append(allErrs, errs.NewFieldInvalid("runAsUser", *sc.RunAsUser, "runAsUser cannot be negative"))
+		}
+	}
 	return allErrs
 }

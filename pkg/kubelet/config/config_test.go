@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 )
 
@@ -62,7 +63,14 @@ func CreateValidPod(name, namespace, source string) *api.Pod {
 		Spec: api.PodSpec{
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
-			Containers:    []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent"}},
+			Containers: []api.Container{
+				{
+					Name:            "ctr",
+					Image:           "image",
+					ImagePullPolicy: "IfNotPresent",
+					SecurityContext: securitycontext.ValidSecurityContextWithContainerDefaults(),
+				},
+			},
 		},
 	}
 }

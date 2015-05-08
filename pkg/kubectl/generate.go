@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,13 +37,6 @@ type Generator interface {
 	Generate(params map[string]string) (runtime.Object, error)
 	// ParamNames returns the list of parameters that this generator uses
 	ParamNames() []GeneratorParam
-}
-
-// Generators is a global list of known generators.
-// TODO: Dynamically create this from a list of template files?
-var Generators map[string]Generator = map[string]Generator{
-	"run-container/v1": BasicReplicationController{},
-	"service/v1":       ServiceGenerator{},
 }
 
 // ValidateParams ensures that all required params are present in the params map

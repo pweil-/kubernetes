@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -972,4 +972,12 @@ func (aws *AWSCloud) DeleteVolume(volumeName string) error {
 		return err
 	}
 	return awsDisk.delete()
+}
+
+func (v *AWSCloud) Configure(name string, spec *api.NodeSpec) error {
+	return nil
+}
+
+func (v *AWSCloud) Release(name string) error {
+	return nil
 }

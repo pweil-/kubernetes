@@ -1,7 +1,7 @@
-// +build integration,!no-etcd
+// +build integration,!no-etcd,linux
 
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	prometheuspb "github.com/prometheus/client_model/go"

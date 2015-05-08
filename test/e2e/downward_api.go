@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ var _ = Describe("Downward API", func() {
 							{
 								Name: "POD_NAME",
 								ValueFrom: &api.EnvVarSource{
-									FieldPath: &api.ObjectFieldSelector{
+									FieldRef: &api.ObjectFieldSelector{
 										APIVersion: "v1beta3",
 										FieldPath:  "metadata.name",
 									},
@@ -75,7 +75,7 @@ var _ = Describe("Downward API", func() {
 							{
 								Name: "POD_NAMESPACE",
 								ValueFrom: &api.EnvVarSource{
-									FieldPath: &api.ObjectFieldSelector{
+									FieldRef: &api.ObjectFieldSelector{
 										APIVersion: "v1beta3",
 										FieldPath:  "metadata.namespace",
 									},

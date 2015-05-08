@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 
 // NewSimpleFake returns a client that will respond with the provided objects
 func NewSimpleFake(objects ...runtime.Object) *Fake {
-	o := NewObjects(api.Scheme)
+	o := NewObjects(api.Scheme, api.Scheme)
 	for _, obj := range objects {
 		if err := o.Add(obj); err != nil {
 			panic(err)
@@ -105,6 +105,10 @@ func (c *Fake) Pods(namespace string) client.PodInterface {
 
 func (c *Fake) Services(namespace string) client.ServiceInterface {
 	return &FakeServices{Fake: c, Namespace: namespace}
+}
+
+func (c *Fake) ServiceAccounts(namespace string) client.ServiceAccountsInterface {
+	return &FakeServiceAccounts{Fake: c, Namespace: namespace}
 }
 
 func (c *Fake) Secrets(namespace string) client.SecretsInterface {

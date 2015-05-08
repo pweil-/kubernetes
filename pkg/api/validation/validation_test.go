@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -636,7 +636,7 @@ func TestValidateEnv(t *testing.T) {
 		{
 			Name: "abc",
 			ValueFrom: &api.EnvVarSource{
-				FieldPath: &api.ObjectFieldSelector{
+				FieldRef: &api.ObjectFieldSelector{
 					APIVersion: "v1beta3",
 					FieldPath:  "metadata.name",
 				},
@@ -668,7 +668,7 @@ func TestValidateEnv(t *testing.T) {
 				Name:  "abc",
 				Value: "foo",
 				ValueFrom: &api.EnvVarSource{
-					FieldPath: &api.ObjectFieldSelector{
+					FieldRef: &api.ObjectFieldSelector{
 						APIVersion: "v1beta3",
 						FieldPath:  "metadata.name",
 					},
@@ -681,50 +681,50 @@ func TestValidateEnv(t *testing.T) {
 			envs: []api.EnvVar{{
 				Name: "abc",
 				ValueFrom: &api.EnvVarSource{
-					FieldPath: &api.ObjectFieldSelector{
+					FieldRef: &api.ObjectFieldSelector{
 						APIVersion: "v1beta3",
 					},
 				},
 			}},
-			expectedError: "[0].valueFrom.fieldPath.fieldPath: required value",
+			expectedError: "[0].valueFrom.fieldRef.fieldPath: required value",
 		},
 		{
 			name: "missing APIVersion on ObjectFieldSelector",
 			envs: []api.EnvVar{{
 				Name: "abc",
 				ValueFrom: &api.EnvVarSource{
-					FieldPath: &api.ObjectFieldSelector{
+					FieldRef: &api.ObjectFieldSelector{
 						FieldPath: "metadata.name",
 					},
 				},
 			}},
-			expectedError: "[0].valueFrom.fieldPath.apiVersion: required value",
+			expectedError: "[0].valueFrom.fieldRef.apiVersion: required value",
 		},
 		{
 			name: "invalid fieldPath",
 			envs: []api.EnvVar{{
 				Name: "abc",
 				ValueFrom: &api.EnvVarSource{
-					FieldPath: &api.ObjectFieldSelector{
+					FieldRef: &api.ObjectFieldSelector{
 						FieldPath:  "metadata.whoops",
 						APIVersion: "v1beta3",
 					},
 				},
 			}},
-			expectedError: "[0].valueFrom.fieldPath.fieldPath: invalid value 'metadata.whoops': error converting fieldPath",
+			expectedError: "[0].valueFrom.fieldRef.fieldPath: invalid value 'metadata.whoops': error converting fieldPath",
 		},
 		{
 			name: "unsupported fieldPath",
 			envs: []api.EnvVar{{
 				Name: "abc",
 				ValueFrom: &api.EnvVarSource{
-					FieldPath: &api.ObjectFieldSelector{
+					FieldRef: &api.ObjectFieldSelector{
 						FieldPath:  "status.phase",
 						APIVersion: "v1beta3",
 					},
 				},
 			}},
-			expectedError: "[0].valueFrom.fieldPath.fieldPath: unsupported value 'status.phase'",
+			expectedError: "[0].valueFrom.fieldRef.fieldPath: unsupported value 'status.phase'",
 		},
 	}
 	for _, tc := range errorCases {
@@ -901,7 +901,7 @@ func TestValidateContainers(t *testing.T) {
 			},
 			ImagePullPolicy: "IfNotPresent",
 		},
-		{Name: "abc-1234", Image: "image", Privileged: true, ImagePullPolicy: "IfNotPresent"},
+		{Name: "abc-1234", Image: "image", ImagePullPolicy: "IfNotPresent", SecurityContext: fakeValidSecurityContext(true)},
 	}
 	if errs := validateContainers(successCase, volumes); len(errs) != 0 {
 		t.Errorf("expected success: %v", errs)
@@ -1015,7 +1015,7 @@ func TestValidateContainers(t *testing.T) {
 			},
 		},
 		"privilege disabled": {
-			{Name: "abc", Image: "image", Privileged: true},
+			{Name: "abc", Image: "image", SecurityContext: fakeValidSecurityContext(true)},
 		},
 		"invalid compute resource": {
 			{
@@ -3178,5 +3178,91 @@ func TestValidateEndpoints(t *testing.T) {
 		if errs := ValidateEndpoints(&v.endpoints); len(errs) == 0 || errs[0].(*errors.ValidationError).Type != v.errorType || errs[0].(*errors.ValidationError).Detail != v.errorDetail {
 			t.Errorf("Expected error type %s with detail %s for %s, got %v", v.errorType, v.errorDetail, k, errs)
 		}
+	}
+}
+
+func TestValidateSecurityContext(t *testing.T) {
+	priv := false
+	var runAsUser int64 = 1
+	fullValidSC := func() *api.SecurityContext {
+		return &api.SecurityContext{
+			Privileged: &priv,
+			Capabilities: &api.Capabilities{
+				Add:  []api.CapabilityType{"foo"},
+				Drop: []api.CapabilityType{"bar"},
+			},
+			SELinuxOptions: &api.SELinuxOptions{
+				User:  "user",
+				Role:  "role",
+				Type:  "type",
+				Level: "level",
+			},
+			RunAsUser: &runAsUser,
+		}
+	}
+
+	//setup data
+	allSettings := fullValidSC()
+	noCaps := fullValidSC()
+	noCaps.Capabilities = nil
+
+	noSELinux := fullValidSC()
+	noSELinux.SELinuxOptions = nil
+
+	noPrivRequest := fullValidSC()
+	noPrivRequest.Privileged = nil
+
+	noRunAsUser := fullValidSC()
+	noRunAsUser.RunAsUser = nil
+
+	successCases := map[string]struct {
+		sc *api.SecurityContext
+	}{
+		"all settings":    {allSettings},
+		"no capabilities": {noCaps},
+		"no selinux":      {noSELinux},
+		"no priv request": {noPrivRequest},
+		"no run as user":  {noRunAsUser},
+	}
+	for k, v := range successCases {
+		if errs := ValidateSecurityContext(v.sc); len(errs) != 0 {
+			t.Errorf("Expected success for %s, got %v", k, errs)
+		}
+	}
+
+	privRequestWithGlobalDeny := fullValidSC()
+	requestPrivileged := true
+	privRequestWithGlobalDeny.Privileged = &requestPrivileged
+
+	negativeRunAsUser := fullValidSC()
+	var negativeUser int64 = -1
+	negativeRunAsUser.RunAsUser = &negativeUser
+
+	errorCases := map[string]struct {
+		sc          *api.SecurityContext
+		errorType   fielderrors.ValidationErrorType
+		errorDetail string
+	}{
+		"request privileged when capabilities forbids": {
+			sc:          privRequestWithGlobalDeny,
+			errorType:   "FieldValueForbidden",
+			errorDetail: "",
+		},
+		"negative RunAsUser": {
+			sc:          negativeRunAsUser,
+			errorType:   "FieldValueInvalid",
+			errorDetail: "runAsUser cannot be negative",
+		},
+	}
+	for k, v := range errorCases {
+		if errs := ValidateSecurityContext(v.sc); len(errs) == 0 || errs[0].(*errors.ValidationError).Type != v.errorType || errs[0].(*errors.ValidationError).Detail != v.errorDetail {
+			t.Errorf("Expected error type %s with detail %s for %s, got %v", v.errorType, v.errorDetail, k, errs)
+		}
+	}
+}
+
+func fakeValidSecurityContext(priv bool) *api.SecurityContext {
+	return &api.SecurityContext{
+		Privileged: &priv,
 	}
 }

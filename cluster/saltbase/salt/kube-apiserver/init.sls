@@ -9,11 +9,17 @@
 {% endif %}
 {% endif %}
 
-{% if grains['cloud'] is defined and grains['cloud'] == 'gce' %}
+{% if grains['cloud'] is defined and grains.cloud in [ 'aws', 'gce' ]  %}
 /srv/kubernetes/basic_auth.csv:
   file.managed:
     - source: salt://kube-apiserver/basic_auth.csv
 {% endif %}
+
+/var/log/kube-apiserver.log:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 644
 
 # Copy kube-apiserver manifest to manifests folder for kubelet.
 /etc/kubernetes/manifests/kube-apiserver.manifest:

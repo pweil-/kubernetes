@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -88,11 +88,12 @@ func TestSyncNamespaceThatIsTerminating(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error when synching namespace %v", err)
 	}
+	// TODO: Reuse the constants for all these strings from testclient
 	expectedActionSet := util.NewStringSet(
+		testclient.ListControllerAction,
 		"list-services",
 		"list-pods",
 		"list-resourceQuotas",
-		"list-replicationControllers",
 		"list-secrets",
 		"list-limitRanges",
 		"list-events",
@@ -135,7 +136,7 @@ func TestSyncNamespaceThatIsActive(t *testing.T) {
 }
 
 func TestRunStop(t *testing.T) {
-	o := testclient.NewObjects(api.Scheme)
+	o := testclient.NewObjects(api.Scheme, api.Scheme)
 	client := &testclient.Fake{ReactFn: testclient.ObjectReaction(o, latest.RESTMapper)}
 	nsMgr := NewNamespaceManager(client, 1*time.Second)
 

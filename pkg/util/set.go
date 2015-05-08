@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -75,6 +75,16 @@ func (s StringSet) HasAll(items ...string) bool {
 	return true
 }
 
+// HasAny returns true if any items are contained in the set.
+func (s StringSet) HasAny(items ...string) bool {
+	for _, item := range items {
+		if s.Has(item) {
+			return true
+		}
+	}
+	return false
+}
+
 // Difference returns a set of objects that are not in s2
 // For example:
 // s1 = {1, 2, 3}
@@ -127,6 +137,15 @@ func (s StringSet) List() []string {
 	}
 	sort.StringSlice(res).Sort()
 	return res
+}
+
+// Returns a single element from the set.
+func (s StringSet) PopAny() (string, bool) {
+	for key := range s {
+		s.Delete(key)
+		return key, true
+	}
+	return "", false
 }
 
 // Len returns the size of the set.

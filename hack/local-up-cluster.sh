@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2014 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 DOCKER_OPTS=${DOCKER_OPTS:-""}
 DOCKER_NATIVE=${DOCKER_NATIVE:-""}
 DOCKER=(docker ${DOCKER_OPTS})
+DOCKERIZE_KUBELET=${DOCKERIZE_KUBELET:-""}
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/..
 cd "${KUBE_ROOT}"
@@ -45,6 +46,7 @@ API_HOST=${API_HOST:-127.0.0.1}
 API_CORS_ALLOWED_ORIGINS=${API_CORS_ALLOWED_ORIGINS:-"/127.0.0.1(:[0-9]+)?$,/localhost(:[0-9]+)?$"}
 KUBELET_PORT=${KUBELET_PORT:-10250}
 LOG_LEVEL=${LOG_LEVEL:-3}
+CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
 CHAOS_CHANCE=${CHAOS_CHANCE:-0.0}
 
 # For the common local scenario, fail fast if server is already running.
@@ -94,13 +96,28 @@ case "$(uname -m)" in
 esac
 
 GO_OUT="${KUBE_ROOT}/_output/local/bin/${host_os}/${host_arch}"
+KUBELET_CIDFILE=/tmp/kubelet.cid
+
+cleanup_dockerized_kubelet()
+{
+  if [[ -e $KUBELET_CIDFILE ]]; then 
+    docker kill $(<$KUBELET_CIDFILE) > /dev/null
+    rm -f $KUBELET_CIDFILE
+  fi
+}
 
 cleanup()
 {
     echo "Cleaning up..."
     [[ -n "${APISERVER_PID-}" ]] && sudo kill "${APISERVER_PID}"
     [[ -n "${CTLRMGR_PID-}" ]] && sudo kill "${CTLRMGR_PID}"
-    [[ -n "${KUBELET_PID-}" ]] && sudo kill "${KUBELET_PID}"
+    
+    if [[ -n "$DOCKERIZE_KUBELET" ]]; then
+      cleanup_dockerized_kubelet
+    else 
+      [[ -n "${KUBELET_PID-}" ]] && sudo kill "${KUBELET_PID}"
+    fi
+
     [[ -n "${PROXY_PID-}" ]] && sudo kill "${PROXY_PID}"
     [[ -n "${SCHEDULER_PID-}" ]] && sudo kill "${SCHEDULER_PID}"
 
@@ -115,12 +132,19 @@ trap cleanup EXIT
 echo "Starting etcd"
 kube::etcd::start
 
+# Make public/private key for ServiceAccount token generation and verification
+openssl genrsa -out /tmp/serviceaccount.private.key 2048
+openssl rsa -in /tmp/serviceaccount.private.key -outform PEM -out /tmp/serviceaccount.public.key -pubout
+SERVICE_ACCOUNT_LOOKUP=${SERVICE_ACCOUNT_LOOKUP:-false}
+
 # Admission Controllers to invoke prior to persisting objects in cluster
-ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,ResourceQuota
+ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
 
 APISERVER_LOG=/tmp/kube-apiserver.log
 sudo -E "${GO_OUT}/kube-apiserver" \
   --v=${LOG_LEVEL} \
+  --service-account-public-key-file="/tmp/serviceaccount.public.key" \
+  --service-account-lookup="${SERVICE_ACCOUNT_LOOKUP}" \
   --admission_control="${ADMISSION_CONTROL}" \
   --address="${API_HOST}" \
   --port="${API_PORT}" \
@@ -138,19 +162,41 @@ CTLRMGR_LOG=/tmp/kube-controller-manager.log
 sudo -E "${GO_OUT}/kube-controller-manager" \
   --v=${LOG_LEVEL} \
   --machines="127.0.0.1" \
+  --service-account-private-key="/tmp/serviceaccount.private.key" \
   --master="${API_HOST}:${API_PORT}" >"${CTLRMGR_LOG}" 2>&1 &
 CTLRMGR_PID=$!
 
 KUBELET_LOG=/tmp/kubelet.log
-sudo -E "${GO_OUT}/kubelet" \
-  --v=${LOG_LEVEL} \
-  --chaos_chance="${CHAOS_CHANCE}" \
-  --hostname_override="127.0.0.1" \
-  --address="127.0.0.1" \
-  --api_servers="${API_HOST}:${API_PORT}" \
-  --auth_path="${KUBE_ROOT}/hack/.test-cmd-auth" \
-  --port="$KUBELET_PORT" >"${KUBELET_LOG}" 2>&1 &
-KUBELET_PID=$!
+if [[ -z "${DOCKERIZE_KUBELET}" ]]; then
+  sudo -E "${GO_OUT}/kubelet" \
+    --v=${LOG_LEVEL} \
+    --chaos_chance="${CHAOS_CHANCE}" \
+    --container_runtime="${CONTAINER_RUNTIME}" \
+    --hostname_override="127.0.0.1" \
+    --address="127.0.0.1" \
+    --api_servers="${API_HOST}:${API_PORT}" \
+    --auth_path="${KUBE_ROOT}/hack/.test-cmd-auth" \
+    --port="$KUBELET_PORT" >"${KUBELET_LOG}" 2>&1 &
+  KUBELET_PID=$!
+else
+  # Docker won't run a container with a cidfile (container id file)
+  # unless that file does not already exist; clean up an existing
+  # dockerized kubelet that might be running.
+  cleanup_dockerized_kubelet
+
+  docker run \
+    --volume=/:/rootfs:ro \
+    --volume=/var/run:/var/run:rw \
+    --volume=/sys:/sys:ro \
+    --volume=/var/lib/docker/:/var/lib/docker:ro \
+    --volume=/var/lib/kubelet/:/var/lib/kubelet:rw \
+    --net=host \
+    --privileged=true \
+    -i \
+    --cidfile=$KUBELET_CIDFILE \
+    gcr.io/google_containers/kubelet \
+    /kubelet --v=3 --containerized --chaos-chance="${CHAOS_CHANCE}" --hostname-override="127.0.0.1" --address="127.0.0.1" --api-servers="${API_HOST}:${API_PORT}" --port="$KUBELET_PORT" --resource-container="" &> $KUBELET_LOG &
+fi
 
 PROXY_LOG=/tmp/kube-proxy.log
 sudo -E "${GO_OUT}/kube-proxy" \
@@ -170,9 +216,9 @@ Local Kubernetes cluster is running. Press Ctrl-C to shut it down.
 Logs:
   ${APISERVER_LOG}
   ${CTLRMGR_LOG}
-  ${KUBELET_LOG}
   ${PROXY_LOG}
   ${SCHEDULER_LOG}
+  ${KUBELET_LOG}
 
 To start using your cluster, open up another terminal/tab and run:
 

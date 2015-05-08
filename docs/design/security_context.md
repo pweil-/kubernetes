@@ -32,7 +32,7 @@ Processes in pods will need to have consistent UID/GID/SELinux category labels i
 * The concept of a security context should not be tied to a particular security mechanism or platform 
   (ie. SELinux, AppArmor)
 * Applying a different security context to a scope (namespace or pod) requires a solution such as the one proposed for
-  [service accounts](https://github.com/GoogleCloudPlatform/kubernetes/pull/2297).
+  [service accounts](./service_accounts.md).
 
 ## Use Cases
 
@@ -64,19 +64,104 @@ be addressed with security contexts:
 ## Proposed Design
 
 ### Overview
-A *security context* consists of a set of constraints that determine how a container
-is secured before getting created and run. It has a 1:1 correspondence to a
-[service account](https://github.com/GoogleCloudPlatform/kubernetes/pull/2297). A *security context provider* is passed to the Kubelet so it can have a chance
-to mutate Docker API calls in order to apply the security context.
 
-It is recommended that this design be implemented in two phases:
+#### Components
+1.  **security context constraints** - defines the policy under which a security context can make
+requests.  Has a 1:1 relationship with a service account.  Also exists at a cluster level to provide
+a default policy for the entire cluster.  The security context constraints must be extensible
+to allow new implementations of context generating strategies to support future use cases like
+running with a UID selected from a range or allowing multiple sets of SELinux options.
+2.  **security context** - the run time parameters that a container will be configured with before
+being created and run.  The security context is attached to the container and is used by the Kubelet
+to mutate container API calls (Docker, Rkt, etc) in order to apply the security context.
+3.  **security context constraints provider** - provides utility for creating security contexts
+based on the security context constraints and for validating that an existing security context
+complies with the constraints.
+4.  **security context provider** - provides utility to the Kubelet for modifying the
+container API calls
 
-1.  Implement the security context provider extension point in the Kubelet 
-    so that a default security context can be applied on container run and creation.
-2.  Implement a security context structure that is part of a service account. The
-    default context provider can then be used to apply a security context based
-    on the service account associated with the pod.
-    
+### Security Context Constraints
+
+```go
+// SecurityContextConstraints governs the ability to make requests that affect the SecurityContext that will
+// be applied to a container.
+type SecurityContextConstraints struct {
+	// AllowPrivilegedContainer determines if a container can request to be run as privileged.
+	AllowPrivilegedContainer bool
+	// HostNetworkSources is a list of pod sources that are allowed to request to run in the host's
+	// network namespace.
+	HostNetworkSources []string
+	// AllowedCapabilities is a list of capabilities that can be requested to add to the container.
+	AllowedCapabilities []CapabilityType
+	// SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
+	SELinuxContext SELinuxContextStrategy
+	// AllowHostDirVolumePlugin determines if the policy allow containers to use the HostDir volume plugin
+	AllowHostDirVolumePlugin bool
+	// RunAsUser  is the strategy that will dictate what RunAsUser is used in the SecurityContext.
+	RunAsUser RunAsUserStrategy
+}
+
+// SELinuxContextStrategy provides configuration options for all SELinuxContextStrategy that can be used
+// in a SecurityContextConstraints.
+type SELinuxContextStrategy struct {
+	// StrategyType is the SELinuxContextStrategyType being configured.
+	StrategyType SELinuxContextStrategyType
+
+	// SELinuxOptions are the specific SELinux labels to apply.  Required for SELinuxStrategyMustRunAs.
+	SELinuxOptions *SELinuxOptions
+}
+
+// RunAsUserStrategy provides configuration options for all RunAsUserStrategy that can be used
+// in a SecurityContextConstraints.
+type RunAsUserStrategy struct {
+	// StrategyType is the RunAsUserStrategyType being configured.
+	StrategyType RunAsUserStrategyType
+
+	// UID is a specific uid that will run pid 0 in the container.  Required for type RunAsUserStrategyMustRunAs.
+	UID *int64
+}
+
+// SELinuxContextStrategyType defines different strategies that can be used when determining
+// the SELinux labels to be applied to the container.
+type SELinuxContextStrategyType string
+
+// RunAsUserStrategyType defines different strategies that can be used when determining
+// the uid that pid 1 will run as in the container.
+type RunAsUserStrategyType string
+
+const (
+	// container must have SELinux labels of X applied.
+	SELinuxStrategyMustRunAs SELinuxContextStrategyType = "MustRunAs"
+	// container may make requests for any SELinux context labels.
+	SELinuxStrategyRunAsAny SELinuxContextStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	SELinuxStrategyRunAsDefault SELinuxContextStrategyType = "RunAsDefault"
+
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAs RunAsUserStrategyType = "MustRunAs"
+	// container must run as a non-root uid
+	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategyType = "MustRunAsNonRoot"
+	// container may make requests for any uid.
+	RunAsUserStrategyRunAsAny RunAsUserStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	RunAsUserStrategyRunAsDefault RunAsUserStrategyType = "RunAsDefault"
+)
+```
+
+### Security Context Constraints Provider
+
+```go
+// SecurityContextConstraintsProvider is responsible for ensuring that every service account has a
+// security constraints in place and that a pod's context adheres to the active constraints.
+type SecurityContextConstraintsProvider interface {
+	// CreateContextForPod creates a security context for the pod based on what was
+	// requested and what the policy allows
+	CreateContextForContainer(pod *api.Pod, container *api.Container) *api.SecurityContext
+	// ValidateAgainstConstraints validates the pod against SecurityContextConstraints
+	ValidateAgainstConstraints(pod *api.Pod) fielderrors.ValidationErrorList
+}
+```
+
 ### Security Context Provider
 
 The Kubelet will have an interface that points to a `SecurityContextProvider`. The `SecurityContextProvider` is invoked before creating and running a given container:
@@ -103,88 +188,74 @@ If the value of the SecurityContextProvider field on the Kubelet is nil, the kub
 
 ### Security Context
 
-A security context has a 1:1 correspondence to a service account and it can be included as
-part of the service account resource. Following is an example of an initial implementation:
-
 ```go
 
-// SecurityContext specifies the security constraints associated with a service account
+// SecurityContext holds security configuration that will be applied to a container.  SecurityContext
+// contains duplication of some existing fields from the Container resource.  These duplicate fields
+// will be populated based on the Container configuration if they are not set.  Defining them on
+// both the Container AND the SecurityContext will result in an error.
 type SecurityContext struct {
-    // user is the uid to use when running the container
-	User int
-	
-	// AllowPrivileged indicates whether this context allows privileged mode containers
-	AllowPrivileged bool
-	
-	// AllowedVolumeTypes lists the types of volumes that a container can bind
-	AllowedVolumeTypes []string
-	
-	// AddCapabilities is the list of Linux kernel capabilities to add
-	AddCapabilities []string
-	
-	// RemoveCapabilities is the list of Linux kernel capabilities to remove
-	RemoveCapabilities []string
-	
-	// Isolation specifies the type of isolation required for containers 
-	// in this security context 
-	Isolation ContainerIsolationSpec
+	// Capabilities are the capabilities to add/drop when running the container
+	Capabilities *Capabilities
+
+	// Run the container in privileged mode
+	Privileged *bool
+
+	// SELinuxOptions are the labels to be applied to the container
+	// and volumes
+	SELinuxOptions *SELinuxOptions
+
+	// RunAsUser is the UID to run the entrypoint of the container process.
+	RunAsUser *int64
 }
 
-// ContainerIsolationSpec indicates intent for container isolation
-type ContainerIsolationSpec struct {
-	// Type is the container isolation type (None, Private)
-	Type ContainerIsolationType
-	
-	// FUTURE: IDMapping specifies how users and groups from the host will be mapped
-	IDMapping *IDMapping
+// SELinuxOptions are the labels to be applied to the container.
+type SELinuxOptions struct {
+	// SELinux user label
+	User string
+
+	// SELinux role label
+	Role string
+
+	// SELinux type label
+	Type string
+
+	// SELinux level label.
+	Level string
 }
-
-// ContainerIsolationType is the type of container isolation for a security context
-type ContainerIsolationType string
-
-const (
-    // ContainerIsolationNone means that no additional consraints are added to
-    // containers to isolate them from their host
-	ContainerIsolationNone ContainerIsolationType = "None"
-	
-	// ContainerIsolationPrivate means that containers are isolated in process
-	// and storage from their host and other containers.
-	ContainerIsolationPrivate ContainerIsolationType = "Private"
-)
-
-// IDMapping specifies the requested user and group mappings for containers 
-// associated with a specific security context
-type IDMapping struct {
-	// SharedUsers is the set of user ranges that must be unique to the entire cluster
-	SharedUsers []IDMappingRange
-	
-	// SharedGroups is the set of group ranges that must be unique to the entire cluster
-	SharedGroups []IDMappingRange
-
-	// PrivateUsers are mapped to users on the host node, but are not necessarily
-	// unique to the entire cluster
-	PrivateUsers []IDMappingRange
-
-	// PrivateGroups are mapped to groups on the host node, but are not necessarily
-	// unique to the entire cluster
-	PrivateGroups []IDMappingRange
-}
-
-// IDMappingRange specifies a mapping between container IDs and node IDs
-type IDMappingRange struct {
-	// ContainerID is the starting container UID or GID
-	ContainerID int
-
-	// HostID is the starting host UID or GID
-	HostID int
-	
-	// Length is the length of the UID/GID range
-	Length int
-}
-
 ```
 
+### Security Context Constraints Lifecycle
 
-#### Security Context Lifecycle
- 
-The lifecycle of a security context will be tied to that of a service account. It is expected that a service account with a default security context will be created for every Kubernetes namespace (without administrator intervention). If resources need to be allocated when creating a security context (for example, assign a range of host uids/gids), a pattern such as [finalizers](https://github.com/GoogleCloudPlatform/kubernetes/issues/3585) can be used before declaring the security context / service account / namespace ready for use.
+A security context constraints configuration exists at both the cluster level and the service account
+level.
+
+For service accounts, the lifecycle of the security context constraints follows that of
+the service account.  If resources need to be allocated when creating a security
+context constraints configuration (for example, assign a range of host uids/gids), a pattern such as [finalizers](https://github.com/GoogleCloudPlatform/kubernetes/issues/3585)
+can be used before declaring the constraints / service account / namespace ready for use.
+
+The constraints that live on the cluster level are tied to the lifecycle of the cluster.  It is
+expected that not every service account will need to define security context constraints and will
+use the default cluster constraints in the absence of an overriding definition.
+
+### Escalating Privileges by an Administrator
+
+It if feasible that an administrator may wish to create a resource in a namespace that runs with
+escalated privileges.  This is similar to saying `sudo make me a pod`.  The security context provider
+may be made aware of identity and allow a creator with certain roles to pass validation despite
+non-conformance to the service account or cluster policy which is expected to be more restrictive. A
+good example of this may be a build controller creating privileged containers.  As a system
+component the build controller may identify itself with a role that allows it to bypass the more
+restrictive set of constraints.
+
+This also allows the system to guard commands being executed in the non-conforming container.  For
+instance, an `exec` command can first check the security context of the pod against the service
+account or cluster policy.  If it does not validate then it can block users from executing the
+command.  Since the validation will be identity aware administrators would still be able to
+run the commands that are restricted to normal users.
+
+With this approach there is not a way for users to point to a more privileged service account
+and inadvertently get access to create pods with escalated privileges.  However, this makes the
+assumption that editing a service account's security context constraints is restricted to
+cluster administrators.

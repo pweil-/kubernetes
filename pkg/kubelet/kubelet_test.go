@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -43,14 +43,10 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/dockertools"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/lifecycle"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/metrics"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/network"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/prober"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/probe"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	uexec "github.com/GoogleCloudPlatform/kubernetes/pkg/util/exec"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/version"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/volume/host_path"
@@ -109,8 +105,10 @@ func newTestKubelet(t *testing.T) *TestKubelet {
 	podManager, fakeMirrorClient := newFakePodManager()
 	kubelet.podManager = podManager
 	kubelet.containerRefManager = kubecontainer.NewRefManager()
-	kubelet.containerManager = dockertools.NewDockerManager(fakeDocker, fakeRecorder, kubelet.readinessManager, kubelet.containerRefManager, dockertools.PodInfraContainerImage, 0, 0, "", kubelet.os, kubelet.networkPlugin, nil)
-	kubelet.runtimeCache = kubecontainer.NewFakeRuntimeCache(kubelet.containerManager)
+	runtimeHooks := newKubeletRuntimeHooks(kubelet.recorder)
+
+	kubelet.containerRuntime = dockertools.NewFakeDockerManager(fakeDocker, fakeRecorder, kubelet.readinessManager, kubelet.containerRefManager, dockertools.PodInfraContainerImage, 0, 0, "", kubelet.os, kubelet.networkPlugin, kubelet, &fakeHTTP{}, runtimeHooks)
+	kubelet.runtimeCache = kubecontainer.NewFakeRuntimeCache(kubelet.containerRuntime)
 	kubelet.podWorkers = newPodWorkers(
 		kubelet.runtimeCache,
 		func(pod *api.Pod, mirrorPod *api.Pod, runningPod container.Pod) error {
@@ -119,12 +117,7 @@ func newTestKubelet(t *testing.T) *TestKubelet {
 			return err
 		},
 		fakeRecorder)
-	kubelet.containerManager.Puller = &dockertools.FakeDockerPuller{}
-	kubelet.prober = prober.New(nil, kubelet.readinessManager, kubelet.containerRefManager, kubelet.recorder)
-	kubelet.containerManager.Prober = kubelet.prober
-	kubelet.handlerRunner = lifecycle.NewHandlerRunner(&fakeHTTP{}, &fakeContainerCommandRunner{}, kubelet.containerManager)
 	kubelet.volumeManager = newVolumeManager()
-	kubelet.runtimeHooks = newKubeletRuntimeHooks(kubelet.recorder)
 	return &TestKubelet{kubelet, fakeDocker, mockCadvisor, fakeKubeClient, waitGroup, fakeMirrorClient}
 }
 
@@ -355,107 +348,6 @@ func apiContainerToContainer(c docker.APIContainers) container.Container {
 	}
 }
 
-func dockerContainersToPod(containers dockertools.DockerContainers) container.Pod {
-	var pod container.Pod
-	for _, c := range containers {
-		dockerName, hash, err := dockertools.ParseDockerName(c.Names[0])
-		if err != nil {
-			continue
-		}
-		pod.Containers = append(pod.Containers, &container.Container{
-			ID:    types.UID(c.ID),
-			Name:  dockerName.ContainerName,
-			Hash:  hash,
-			Image: c.Image,
-		})
-		// TODO(yifan): Only one evaluation is enough.
-		pod.ID = dockerName.PodUID
-		name, namespace, _ := kubecontainer.ParsePodFullName(dockerName.PodFullName)
-		pod.Name = name
-		pod.Namespace = namespace
-	}
-	return pod
-}
-
-func TestKillContainerWithError(t *testing.T) {
-	containers := []docker.APIContainers{
-		{
-			ID:    "1234",
-			Names: []string{"/k8s_foo_qux_new_1234_42"},
-		},
-		{
-			ID:    "5678",
-			Names: []string{"/k8s_bar_qux_new_5678_42"},
-		},
-	}
-	testKubelet := newTestKubelet(t)
-	kubelet := testKubelet.kubelet
-	fakeDocker := testKubelet.fakeDocker
-	fakeDocker.ContainerList = containers
-
-	for _, c := range fakeDocker.ContainerList {
-		kubelet.readinessManager.SetReadiness(c.ID, true)
-	}
-	kubelet.dockerClient = fakeDocker
-	c := apiContainerToContainer(fakeDocker.ContainerList[0])
-	fakeDocker.Errors["stop"] = fmt.Errorf("sample error")
-	err := kubelet.containerManager.KillContainer(c.ID)
-	if err == nil {
-		t.Errorf("expected error, found nil")
-	}
-	verifyCalls(t, fakeDocker, []string{"stop"})
-	killedContainer := containers[0]
-	liveContainer := containers[1]
-	ready := kubelet.readinessManager.GetReadiness(killedContainer.ID)
-	if ready {
-		t.Errorf("exepcted container entry ID '%v' to not be found. states: %+v", killedContainer.ID, ready)
-	}
-	ready = kubelet.readinessManager.GetReadiness(liveContainer.ID)
-	if !ready {
-		t.Errorf("exepcted container entry ID '%v' to be found. states: %+v", liveContainer.ID, ready)
-	}
-}
-
-func TestKillContainer(t *testing.T) {
-	containers := []docker.APIContainers{
-		{
-			ID:    "1234",
-			Names: []string{"/k8s_foo_qux_new_1234_42"},
-		},
-		{
-			ID:    "5678",
-			Names: []string{"/k8s_bar_qux_new_5678_42"},
-		},
-	}
-	testKubelet := newTestKubelet(t)
-	kubelet := testKubelet.kubelet
-	fakeDocker := testKubelet.fakeDocker
-	fakeDocker.ContainerList = append([]docker.APIContainers{}, containers...)
-	fakeDocker.Container = &docker.Container{
-		Name: "foobar",
-	}
-	for _, c := range fakeDocker.ContainerList {
-		kubelet.readinessManager.SetReadiness(c.ID, true)
-	}
-
-	c := apiContainerToContainer(fakeDocker.ContainerList[0])
-	err := kubelet.containerManager.KillContainer(c.ID)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	verifyCalls(t, fakeDocker, []string{"stop"})
-	killedContainer := containers[0]
-	liveContainer := containers[1]
-	ready := kubelet.readinessManager.GetReadiness(killedContainer.ID)
-	if ready {
-		t.Errorf("exepcted container entry ID '%v' to not be found. states: %+v", killedContainer.ID, ready)
-	}
-	ready = kubelet.readinessManager.GetReadiness(liveContainer.ID)
-	if !ready {
-		t.Errorf("exepcted container entry ID '%v' to be found. states: %+v", liveContainer.ID, ready)
-	}
-}
-
 var emptyPodUIDs map[types.UID]metrics.SyncPodType
 
 func generatePodInfraContainerHash(pod *api.Pod) uint64 {
@@ -607,7 +499,10 @@ func TestSyncPodsCreatesNetAndContainer(t *testing.T) {
 	kubelet := testKubelet.kubelet
 	fakeDocker := testKubelet.fakeDocker
 	waitGroup := testKubelet.waitGroup
-	kubelet.containerManager.PodInfraContainerImage = "custom_image_name"
+	// TODO: Move this test to dockertools so that we don't have to do the hacky
+	// type assertion here.
+	dm := kubelet.containerRuntime.(*dockertools.DockerManager)
+	dm.PodInfraContainerImage = "custom_image_name"
 	fakeDocker.ContainerList = []docker.APIContainers{}
 	pods := []*api.Pod{
 		{
@@ -668,9 +563,12 @@ func TestSyncPodsCreatesNetAndContainerPullsImage(t *testing.T) {
 	kubelet := testKubelet.kubelet
 	fakeDocker := testKubelet.fakeDocker
 	waitGroup := testKubelet.waitGroup
-	puller := kubelet.containerManager.Puller.(*dockertools.FakeDockerPuller)
+	// TODO: Move this test to dockertools so that we don't have to do the hacky
+	// type assertion here.
+	dm := kubelet.containerRuntime.(*dockertools.DockerManager)
+	puller := dm.Puller.(*dockertools.FakeDockerPuller)
 	puller.HasImages = []string{}
-	kubelet.containerManager.PodInfraContainerImage = "custom_image_name"
+	dm.PodInfraContainerImage = "custom_image_name"
 	fakeDocker.ContainerList = []docker.APIContainers{}
 	pods := []*api.Pod{
 		{
@@ -780,6 +678,16 @@ func TestSyncPodsWithPodInfraCreatesContainer(t *testing.T) {
 	fakeDocker.Unlock()
 }
 
+type fakeHTTP struct {
+	url string
+	err error
+}
+
+func (f *fakeHTTP) Get(url string) (*http.Response, error) {
+	f.url = url
+	return nil, f.err
+}
+
 func TestSyncPodsWithPodInfraCreatesContainerCallsHandler(t *testing.T) {
 	testKubelet := newTestKubelet(t)
 	testKubelet.fakeCadvisor.On("MachineInfo").Return(&cadvisorApi.MachineInfo{}, nil)
@@ -787,8 +695,12 @@ func TestSyncPodsWithPodInfraCreatesContainerCallsHandler(t *testing.T) {
 	fakeDocker := testKubelet.fakeDocker
 	waitGroup := testKubelet.waitGroup
 	fakeHttp := fakeHTTP{}
+
+	// Simulate HTTP failure. Re-create the containerRuntime to inject the failure.
 	kubelet.httpClient = &fakeHttp
-	kubelet.handlerRunner = lifecycle.NewHandlerRunner(kubelet.httpClient, &fakeContainerCommandRunner{}, kubelet.containerManager)
+	runtimeHooks := newKubeletRuntimeHooks(kubelet.recorder)
+	kubelet.containerRuntime = dockertools.NewFakeDockerManager(kubelet.dockerClient, kubelet.recorder, kubelet.readinessManager, kubelet.containerRefManager, dockertools.PodInfraContainerImage, 0, 0, "", kubelet.os, kubelet.networkPlugin, kubelet, kubelet.httpClient, runtimeHooks)
+
 	pods := []*api.Pod{
 		{
 			ObjectMeta: api.ObjectMeta{
@@ -854,7 +766,7 @@ func TestSyncPodsWithPodInfraCreatesContainerCallsHandler(t *testing.T) {
 	}
 	fakeDocker.Unlock()
 	if fakeHttp.url != "http://foo:8080/bar" {
-		t.Errorf("Unexpected handler: %s", fakeHttp.url)
+		t.Errorf("Unexpected handler: %q", fakeHttp.url)
 	}
 }
 
@@ -1661,7 +1573,6 @@ func (f *fakeContainerCommandRunner) PortForward(pod *kubecontainer.Pod, port ui
 	f.Stream = stream
 	return nil
 }
-
 func TestRunInContainerNoSuchPod(t *testing.T) {
 	fakeCommandRunner := fakeContainerCommandRunner{}
 	testKubelet := newTestKubelet(t)
@@ -1728,125 +1639,6 @@ func TestRunInContainer(t *testing.T) {
 	}
 }
 
-func TestRunHandlerExec(t *testing.T) {
-	fakeCommandRunner := fakeContainerCommandRunner{}
-	testKubelet := newTestKubelet(t)
-	kubelet := testKubelet.kubelet
-	fakeDocker := testKubelet.fakeDocker
-	kubelet.runner = &fakeCommandRunner
-	kubelet.handlerRunner = lifecycle.NewHandlerRunner(&fakeHTTP{}, kubelet.runner, kubelet.containerManager)
-
-	containerID := "abc1234"
-	podName := "podFoo"
-	podNamespace := "nsFoo"
-	containerName := "containerFoo"
-
-	fakeDocker.ContainerList = []docker.APIContainers{
-		{
-			ID:    containerID,
-			Names: []string{"/k8s_" + containerName + "_" + podName + "_" + podNamespace + "_12345678_42"},
-		},
-	}
-
-	container := api.Container{
-		Name: containerName,
-		Lifecycle: &api.Lifecycle{
-			PostStart: &api.Handler{
-				Exec: &api.ExecAction{
-					Command: []string{"ls", "-a"},
-				},
-			},
-		},
-	}
-
-	pod := api.Pod{}
-	pod.ObjectMeta.Name = podName
-	pod.ObjectMeta.Namespace = podNamespace
-	pod.Spec.Containers = []api.Container{container}
-	err := kubelet.handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if fakeCommandRunner.ID != containerID ||
-		!reflect.DeepEqual(container.Lifecycle.PostStart.Exec.Command, fakeCommandRunner.Cmd) {
-		t.Errorf("unexpected commands: %v", fakeCommandRunner)
-	}
-}
-
-type fakeHTTP struct {
-	url string
-	err error
-}
-
-func (f *fakeHTTP) Get(url string) (*http.Response, error) {
-	f.url = url
-	return nil, f.err
-}
-
-func TestRunHandlerHttp(t *testing.T) {
-	fakeHttp := fakeHTTP{}
-
-	testKubelet := newTestKubelet(t)
-	kubelet := testKubelet.kubelet
-	kubelet.httpClient = &fakeHttp
-	kubelet.handlerRunner = lifecycle.NewHandlerRunner(kubelet.httpClient, &fakeContainerCommandRunner{}, kubelet.containerManager)
-
-	containerID := "abc1234"
-	podName := "podFoo"
-	podNamespace := "nsFoo"
-	containerName := "containerFoo"
-
-	container := api.Container{
-		Name: containerName,
-		Lifecycle: &api.Lifecycle{
-			PostStart: &api.Handler{
-				HTTPGet: &api.HTTPGetAction{
-					Host: "foo",
-					Port: util.IntOrString{IntVal: 8080, Kind: util.IntstrInt},
-					Path: "bar",
-				},
-			},
-		},
-	}
-	pod := api.Pod{}
-	pod.ObjectMeta.Name = podName
-	pod.ObjectMeta.Namespace = podNamespace
-	pod.Spec.Containers = []api.Container{container}
-	err := kubelet.handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
-
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if fakeHttp.url != "http://foo:8080/bar" {
-		t.Errorf("unexpected url: %s", fakeHttp.url)
-	}
-}
-
-func TestRunHandlerNil(t *testing.T) {
-	testKubelet := newTestKubelet(t)
-	kubelet := testKubelet.kubelet
-
-	containerID := "abc1234"
-	podName := "podFoo"
-	podNamespace := "nsFoo"
-	containerName := "containerFoo"
-
-	container := api.Container{
-		Name: containerName,
-		Lifecycle: &api.Lifecycle{
-			PostStart: &api.Handler{},
-		},
-	}
-	pod := api.Pod{}
-	pod.ObjectMeta.Name = podName
-	pod.ObjectMeta.Namespace = podNamespace
-	pod.Spec.Containers = []api.Container{container}
-	err := kubelet.handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
-	if err == nil {
-		t.Errorf("expect error, but got nil")
-	}
-}
-
 func TestSyncPodEventHandlerFails(t *testing.T) {
 	testKubelet := newTestKubelet(t)
 	testKubelet.fakeCadvisor.On("MachineInfo").Return(&cadvisorApi.MachineInfo{}, nil)
@@ -1854,10 +1646,12 @@ func TestSyncPodEventHandlerFails(t *testing.T) {
 	fakeDocker := testKubelet.fakeDocker
 	waitGroup := testKubelet.waitGroup
 
+	// Simulate HTTP failure. Re-create the containerRuntime to inject the failure.
 	kubelet.httpClient = &fakeHTTP{
 		err: fmt.Errorf("test error"),
 	}
-	kubelet.handlerRunner = lifecycle.NewHandlerRunner(kubelet.httpClient, &fakeContainerCommandRunner{}, kubelet.containerManager)
+	runtimeHooks := newKubeletRuntimeHooks(kubelet.recorder)
+	kubelet.containerRuntime = dockertools.NewFakeDockerManager(kubelet.dockerClient, kubelet.recorder, kubelet.readinessManager, kubelet.containerRefManager, dockertools.PodInfraContainerImage, 0, 0, "", kubelet.os, kubelet.networkPlugin, kubelet, kubelet.httpClient, runtimeHooks)
 
 	pods := []*api.Pod{
 		{
@@ -1921,7 +1715,7 @@ func TestSyncPodEventHandlerFails(t *testing.T) {
 
 	// TODO(yifan): Check the stopped container's name.
 	if len(fakeDocker.Stopped) != 1 {
-		t.Errorf("Wrong containers were stopped: %v", fakeDocker.Stopped)
+		t.Fatalf("Wrong containers were stopped: %v", fakeDocker.Stopped)
 	}
 	dockerName, _, err := dockertools.ParseDockerName(fakeDocker.Stopped[0])
 	if err != nil {
@@ -1938,9 +1732,12 @@ func TestSyncPodsWithPullPolicy(t *testing.T) {
 	kubelet := testKubelet.kubelet
 	fakeDocker := testKubelet.fakeDocker
 	waitGroup := testKubelet.waitGroup
-	puller := kubelet.containerManager.Puller.(*dockertools.FakeDockerPuller)
+	// TODO: Move this test to dockertools so that we don't have to do the hacky
+	// type assertion here.
+	dm := kubelet.containerRuntime.(*dockertools.DockerManager)
+	puller := dm.Puller.(*dockertools.FakeDockerPuller)
 	puller.HasImages = []string{"existing_one", "want:latest"}
-	kubelet.containerManager.PodInfraContainerImage = "custom_image_name"
+	dm.PodInfraContainerImage = "custom_image_name"
 	fakeDocker.ContainerList = []docker.APIContainers{}
 
 	pods := []*api.Pod{
@@ -2384,7 +2181,7 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 					{
 						Name: "POD_NAME",
 						ValueFrom: &api.EnvVarSource{
-							FieldPath: &api.ObjectFieldSelector{
+							FieldRef: &api.ObjectFieldSelector{
 								APIVersion: "v1beta3",
 								FieldPath:  "metadata.name",
 							},
@@ -2393,7 +2190,7 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 					{
 						Name: "POD_NAMESPACE",
 						ValueFrom: &api.EnvVarSource{
-							FieldPath: &api.ObjectFieldSelector{
+							FieldRef: &api.ObjectFieldSelector{
 								APIVersion: "v1beta3",
 								FieldPath:  "metadata.namespace",
 							},
@@ -3057,7 +2854,10 @@ func TestPortForward(t *testing.T) {
 
 	podInfraContainerImage := "POD"
 	infraContainerID := "infra"
-	kubelet.containerManager.PodInfraContainerImage = podInfraContainerImage
+	// TODO: Move this test to dockertools so that we don't have to do the hacky
+	// type assertion here.
+	dm := kubelet.containerRuntime.(*dockertools.DockerManager)
+	dm.PodInfraContainerImage = podInfraContainerImage
 
 	fakeDocker.ContainerList = []docker.APIContainers{
 		{
@@ -4166,6 +3966,7 @@ func TestGetPodStatusWithLastTermination(t *testing.T) {
 	}
 }
 
+// TODO(vmarmol): Move this test away from using RunContainer().
 func TestGetPodCreationFailureReason(t *testing.T) {
 	testKubelet := newTestKubelet(t)
 	kubelet := testKubelet.kubelet
@@ -4190,7 +3991,10 @@ func TestGetPodCreationFailureReason(t *testing.T) {
 	pods := []*api.Pod{pod}
 	kubelet.podManager.SetPods(pods)
 	kubelet.volumeManager.SetVolumes(pod.UID, volumeMap{})
-	_, err := kubelet.containerManager.RunContainer(pod, &pod.Spec.Containers[0], kubelet, kubelet.handlerRunner, "", "")
+	// TODO: Move this test to dockertools so that we don't have to do the hacky
+	// type assertion here.
+	dm := kubelet.containerRuntime.(*dockertools.DockerManager)
+	_, err := dm.RunContainer(pod, &pod.Spec.Containers[0], "", "")
 	if err == nil {
 		t.Errorf("expected error, found nil")
 	}
@@ -4311,289 +4115,5 @@ func TestFilterOutTerminatedPods(t *testing.T) {
 	actual := kubelet.filterOutTerminatedPods(pods)
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("expected %#v, got %#v", expected, actual)
-	}
-}
-
-type fakeExecProber struct {
-	result probe.Result
-	err    error
-}
-
-func (p fakeExecProber) Probe(_ uexec.Cmd) (probe.Result, error) {
-	return p.result, p.err
-}
-
-func makeTestKubelet(result probe.Result, err error) *Kubelet {
-	kl := &Kubelet{
-		readinessManager:    kubecontainer.NewReadinessManager(),
-		containerRefManager: kubecontainer.NewRefManager(),
-	}
-
-	// TODO(vmarmol): Fix
-	fakeExec := fakeExecProber{
-		result: result,
-		err:    err,
-	}
-	kl.prober = prober.NewTestProber(fakeExec, kl.readinessManager, kl.containerRefManager, &record.FakeRecorder{})
-	return kl
-}
-
-// TestProbeContainer tests the functionality of probeContainer.
-// Test cases are:
-//
-// No probe.
-// Only LivenessProbe.
-// Only ReadinessProbe.
-// Both probes.
-//
-// Also, for each probe, there will be several cases covering whether the initial
-// delay has passed, whether the probe handler will return Success, Failure,
-// Unknown or error.
-//
-func TestProbeContainer(t *testing.T) {
-	dc := &docker.APIContainers{
-		ID:      "foobar",
-		Created: time.Now().Unix(),
-	}
-	tests := []struct {
-		testContainer     api.Container
-		expectError       bool
-		expectedResult    probe.Result
-		expectedReadiness bool
-	}{
-		// No probes.
-		{
-			testContainer:     api.Container{},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		// Only LivenessProbe.
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{InitialDelaySeconds: 100},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{InitialDelaySeconds: -100},
-			},
-			expectedResult:    probe.Unknown,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Failure,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Unknown,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectError:       true,
-			expectedResult:    probe.Unknown,
-			expectedReadiness: false,
-		},
-		// Only ReadinessProbe.
-		{
-			testContainer: api.Container{
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: 100},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: -100},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				ReadinessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		{
-			testContainer: api.Container{
-				ReadinessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		{
-			testContainer: api.Container{
-				ReadinessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		{
-			testContainer: api.Container{
-				ReadinessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectError:       false,
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-		// Both LivenessProbe and ReadinessProbe.
-		{
-			testContainer: api.Container{
-				LivenessProbe:  &api.Probe{InitialDelaySeconds: 100},
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: 100},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe:  &api.Probe{InitialDelaySeconds: 100},
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: -100},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe:  &api.Probe{InitialDelaySeconds: -100},
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: 100},
-			},
-			expectedResult:    probe.Unknown,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe:  &api.Probe{InitialDelaySeconds: -100},
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: -100},
-			},
-			expectedResult:    probe.Unknown,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: -100},
-			},
-			expectedResult:    probe.Unknown,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-				ReadinessProbe: &api.Probe{InitialDelaySeconds: -100},
-			},
-			expectedResult:    probe.Failure,
-			expectedReadiness: false,
-		},
-		{
-			testContainer: api.Container{
-				LivenessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-				ReadinessProbe: &api.Probe{
-					InitialDelaySeconds: -100,
-					Handler: api.Handler{
-						Exec: &api.ExecAction{},
-					},
-				},
-			},
-			expectedResult:    probe.Success,
-			expectedReadiness: true,
-		},
-	}
-
-	for _, test := range tests {
-		var kl *Kubelet
-
-		if test.expectError {
-			kl = makeTestKubelet(test.expectedResult, errors.New("error"))
-		} else {
-			kl = makeTestKubelet(test.expectedResult, nil)
-		}
-		result, err := kl.prober.Probe(&api.Pod{}, api.PodStatus{}, test.testContainer, dc.ID, dc.Created)
-		if test.expectError && err == nil {
-			t.Error("Expected error but did no error was returned.")
-		}
-		if !test.expectError && err != nil {
-			t.Errorf("Expected error but got: %v", err)
-		}
-		if test.expectedResult != result {
-			t.Errorf("Expected result was %v but probeContainer() returned %v", test.expectedResult, result)
-		}
-		if test.expectedReadiness != kl.readinessManager.GetReadiness(dc.ID) {
-			t.Errorf("Expected readiness was %v but probeContainer() set %v", test.expectedReadiness, kl.readinessManager.GetReadiness(dc.ID))
-		}
 	}
 }

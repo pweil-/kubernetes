@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func (plugin *nfsPlugin) GetAccessModes() []api.AccessModeType {
 	}
 }
 
-func (plugin *nfsPlugin) NewBuilder(spec *volume.Spec, podRef *api.ObjectReference, _ volume.VolumeOptions) (volume.Builder, error) {
+func (plugin *nfsPlugin) NewBuilder(spec *volume.Spec, podRef *api.ObjectReference, _ volume.VolumeOptions, _ mount.Interface) (volume.Builder, error) {
 	return plugin.newBuilderInternal(spec, podRef, plugin.mounter)
 }
 
@@ -80,7 +80,7 @@ func (plugin *nfsPlugin) newBuilderInternal(spec *volume.Spec, podRef *api.Objec
 	}, nil
 }
 
-func (plugin *nfsPlugin) NewCleaner(volName string, podUID types.UID) (volume.Cleaner, error) {
+func (plugin *nfsPlugin) NewCleaner(volName string, podUID types.UID, _ mount.Interface) (volume.Cleaner, error) {
 	return plugin.newCleanerInternal(volName, podUID, plugin.mounter)
 }
 

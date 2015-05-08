@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/network"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/master/ports"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/mount"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
@@ -99,6 +100,8 @@ type KubeletServer struct {
 	CertDirectory                  string
 	NodeStatusUpdateFrequency      time.Duration
 	ResourceContainer              string
+	CgroupRoot                     string
+	ContainerRuntime               string
 
 	// Flags intended for testing
 
@@ -106,6 +109,8 @@ type KubeletServer struct {
 	ReallyCrashForTesting bool
 	// Insert a probability of random errors during calls to the master.
 	ChaosChance float64
+	// Is the kubelet containerized?
+	Containerized bool
 }
 
 // bootstrapping interface for kubelet, targets the initialization protocol
@@ -151,6 +156,8 @@ func NewKubeletServer() *KubeletServer {
 		CertDirectory:               "/var/run/kubernetes",
 		NodeStatusUpdateFrequency:   10 * time.Second,
 		ResourceContainer:           "/kubelet",
+		CgroupRoot:                  "",
+		ContainerRuntime:            "docker",
 	}
 }
 
@@ -202,10 +209,13 @@ func (s *KubeletServer) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.CloudProvider, "cloud-provider", s.CloudProvider, "The provider for cloud services.  Empty string for no provider.")
 	fs.StringVar(&s.CloudConfigFile, "cloud-config", s.CloudConfigFile, "The path to the cloud provider configuration file.  Empty string for no configuration file.")
 	fs.StringVar(&s.ResourceContainer, "resource-container", s.ResourceContainer, "Absolute name of the resource-only container to create and run the Kubelet in (Default: /kubelet).")
+	fs.StringVar(&s.CgroupRoot, "cgroup_root", s.CgroupRoot, "Optional root cgroup to use for pods. This is handled by the container runtime on a best effort basis. Default: '', which means use the container runtime default.")
+	fs.StringVar(&s.ContainerRuntime, "container_runtime", s.ContainerRuntime, "The container runtime to use. Possible values: 'docker'. Default: 'docker'.")
 
 	// Flags intended for testing, not recommended used in production environments.
 	fs.BoolVar(&s.ReallyCrashForTesting, "really-crash-for-testing", s.ReallyCrashForTesting, "If true, when panics occur crash. Intended for testing.")
 	fs.Float64Var(&s.ChaosChance, "chaos-chance", s.ChaosChance, "If > 0.0, introduce random client errors and latency. Intended for testing. [default=0.0]")
+	fs.BoolVar(&s.Containerized, "containerized", s.Containerized, "Experimental support for running kubelet in a container.  Intended for testing. [default=false]")
 }
 
 // Run runs the specified KubeletServer.  This should never exit.
@@ -264,6 +274,12 @@ func (s *KubeletServer) Run(_ []string) error {
 		KeyFile:  s.TLSPrivateKeyFile,
 	}
 
+	mounter := mount.New()
+	if s.Containerized {
+		glog.Info("Running kubelet in containerized mode (experimental)")
+		mounter = &mount.NsenterMounter{}
+	}
+
 	kcfg := KubeletConfig{
 		Address:                        s.Address,
 		AllowPrivileged:                s.AllowPrivileged,
@@ -301,6 +317,9 @@ func (s *KubeletServer) Run(_ []string) error {
 		Cloud:                          cloud,
 		NodeStatusUpdateFrequency: s.NodeStatusUpdateFrequency,
 		ResourceContainer:         s.ResourceContainer,
+		CgroupRoot:                s.CgroupRoot,
+		ContainerRuntime:          s.ContainerRuntime,
+		Mounter:                   mounter,
 	}
 
 	RunKubelet(&kcfg, nil)
@@ -409,6 +428,9 @@ func SimpleKubelet(client *client.Client,
 		NodeStatusUpdateFrequency: 10 * time.Second,
 		ResourceContainer:         "/kubelet",
 		OSInterface:               osInterface,
+		CgroupRoot:                "",
+		ContainerRuntime:          "docker",
+		Mounter:                   mount.New(),
 	}
 	return &kcfg
 }
@@ -536,6 +558,9 @@ type KubeletConfig struct {
 	NodeStatusUpdateFrequency      time.Duration
 	ResourceContainer              string
 	OSInterface                    kubecontainer.OSInterface
+	CgroupRoot                     string
+	ContainerRuntime               string
+	Mounter                        mount.Interface
 }
 
 func createAndInitKubelet(kc *KubeletConfig) (k KubeletBootstrap, pc *config.PodConfig, err error) {
@@ -580,7 +605,10 @@ func createAndInitKubelet(kc *KubeletConfig) (k KubeletBootstrap, pc *config.Pod
 		kc.Cloud,
 		kc.NodeStatusUpdateFrequency,
 		kc.ResourceContainer,
-		kc.OSInterface)
+		kc.OSInterface,
+		kc.CgroupRoot,
+		kc.ContainerRuntime,
+		kc.Mounter)
 
 	if err != nil {
 		return nil, nil, err

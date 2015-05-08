@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -67,6 +67,8 @@ type APIServer struct {
 	BasicAuthFile              string
 	ClientCAFile               string
 	TokenAuthFile              string
+	ServiceAccountKeyFile      string
+	ServiceAccountLookup       bool
 	AuthorizationMode          string
 	AuthorizationPolicyFile    string
 	AdmissionControl           string
@@ -160,6 +162,8 @@ func (s *APIServer) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.BasicAuthFile, "basic-auth-file", s.BasicAuthFile, "If set, the file that will be used to admit requests to the secure port of the API server via http basic authentication.")
 	fs.StringVar(&s.ClientCAFile, "client-ca-file", s.ClientCAFile, "If set, any request presenting a client certificate signed by one of the authorities in the client-ca-file is authenticated with an identity corresponding to the CommonName of the client certificate.")
 	fs.StringVar(&s.TokenAuthFile, "token-auth-file", s.TokenAuthFile, "If set, the file that will be used to secure the secure port of the API server via token authentication.")
+	fs.StringVar(&s.ServiceAccountKeyFile, "service-account-public-key-file", s.ServiceAccountKeyFile, "If set, the PEM-encoded public key used to verify ServiceAccount tokens.")
+	fs.BoolVar(&s.ServiceAccountLookup, "service-account-lookup", s.ServiceAccountLookup, "If true, validate ServiceAccount tokens exist in etcd as part of authentication.")
 	fs.StringVar(&s.AuthorizationMode, "authorization-mode", s.AuthorizationMode, "Selects how to do authorization on the secure port.  One of: "+strings.Join(apiserver.AuthorizationModeChoices, ","))
 	fs.StringVar(&s.AuthorizationPolicyFile, "authorization-policy-file", s.AuthorizationPolicyFile, "File with authorization policy in csv format, used with --authorization-mode=ABAC, on the secure port.")
 	fs.StringVar(&s.AdmissionControl, "admission-control", s.AdmissionControl, "Ordered list of plug-ins to do admission control of resources into cluster. Comma-delimited list of: "+strings.Join(admission.GetPlugins(), ", "))
@@ -256,7 +260,7 @@ func (s *APIServer) Run(_ []string) error {
 
 	n := net.IPNet(s.PortalNet)
 
-	authenticator, err := apiserver.NewAuthenticator(s.BasicAuthFile, s.ClientCAFile, s.TokenAuthFile)
+	authenticator, err := apiserver.NewAuthenticator(s.BasicAuthFile, s.ClientCAFile, s.TokenAuthFile, s.ServiceAccountKeyFile, s.ServiceAccountLookup, client)
 	if err != nil {
 		glog.Fatalf("Invalid Authentication Config: %v", err)
 	}

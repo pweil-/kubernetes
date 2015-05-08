@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler"
 	_ "github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/algorithmprovider"
 	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/factory"
+	docker "github.com/fsouza/go-dockerclient"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/glog"
@@ -224,7 +225,7 @@ func startComponents(firstManifestURL, secondManifestURL, apiVersion string) (st
 			api.ResourceName(api.ResourceMemory): resource.MustParse("10G"),
 		}}
 
-	nodeController := nodecontroller.NewNodeController(nil, "", machineList, nodeResources, cl, 10, 5*time.Minute, util.NewFakeRateLimiter(), 40*time.Second, 60*time.Second, 5*time.Second, "")
+	nodeController := nodecontroller.NewNodeController(nil, "", machineList, nodeResources, cl, 10, 5*time.Minute, util.NewFakeRateLimiter(), 40*time.Second, 60*time.Second, 5*time.Second, "", "", false)
 	nodeController.Run(5*time.Second, true)
 	cadvisorInterface := new(cadvisor.Fake)
 
@@ -232,6 +233,7 @@ func startComponents(firstManifestURL, secondManifestURL, apiVersion string) (st
 	testRootDir := makeTempDirOrDie("kubelet_integ_1.", "")
 	configFilePath := makeTempDirOrDie("config", testRootDir)
 	glog.Infof("Using %s as root dir for kubelet #1", testRootDir)
+	fakeDocker1.VersionInfo = docker.Env{"ApiVersion=1.15"}
 	kcfg := kubeletapp.SimpleKubelet(cl, &fakeDocker1, machineList[0], testRootDir, firstManifestURL, "127.0.0.1", 10250, api.NamespaceDefault, empty_dir.ProbeVolumePlugins(), nil, cadvisorInterface, configFilePath, nil, kubecontainer.FakeOS{})
 	kubeletapp.RunKubelet(kcfg, nil)
 	// Kubelet (machine)
@@ -239,6 +241,7 @@ func startComponents(firstManifestURL, secondManifestURL, apiVersion string) (st
 	// have a place they can schedule.
 	testRootDir = makeTempDirOrDie("kubelet_integ_2.", "")
 	glog.Infof("Using %s as root dir for kubelet #2", testRootDir)
+	fakeDocker2.VersionInfo = docker.Env{"ApiVersion=1.15"}
 	kcfg = kubeletapp.SimpleKubelet(cl, &fakeDocker2, machineList[1], testRootDir, secondManifestURL, "127.0.0.1", 10251, api.NamespaceDefault, empty_dir.ProbeVolumePlugins(), nil, cadvisorInterface, "", nil, kubecontainer.FakeOS{})
 	kubeletapp.RunKubelet(kcfg, nil)
 	return apiServer.URL, configFilePath

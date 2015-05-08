@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -165,6 +165,7 @@ func (s *SwaggerSchema) validateField(value interface{}, apiVersion, fieldName, 
 			}
 		}
 	case "uint64":
+	case "int64":
 	case "integer":
 		_, isNumber := value.(float64)
 		_, isInteger := value.(int)

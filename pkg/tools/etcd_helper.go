@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ limitations under the License.
 package tools
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -31,9 +30,38 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/conversion"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/golang/glog"
 )
+
+var (
+	cacheHitCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "etcd_helper_cache_hit_count",
+			Help: "Counter of etcd helper cache hits.",
+		},
+	)
+	cacheMissCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "etcd_helper_cache_miss_count",
+			Help: "Counter of etcd helper cache miss.",
+		},
+	)
+	cacheEntryCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "etcd_helper_cache_entry_count",
+			Help: "Counter of etcd helper cache entries. This can be different from etcd_helper_cache_miss_count " +
+				"because two concurrent threads can miss the cache and generate the same entry twice.",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(cacheHitCounter)
+	prometheus.MustRegister(cacheMissCounter)
+	prometheus.MustRegister(cacheEntryCounter)
+}
 
 // EtcdHelper offers common object marshalling/unmarshalling operations on an etcd client.
 type EtcdHelper struct {
@@ -179,8 +207,10 @@ func (h *EtcdHelper) getFromCache(index uint64) (runtime.Object, bool) {
 			glog.Errorf("Error during DeepCopy of cached object: %q", err)
 			return nil, false
 		}
+		cacheHitCounter.Inc()
 		return objCopy.(runtime.Object), true
 	}
+	cacheMissCounter.Inc()
 	return nil, false
 }
 
@@ -192,6 +222,9 @@ func (h *EtcdHelper) addToCache(index uint64, obj runtime.Object) {
 	}
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
+	if _, found := h.cache[index]; !found {
+		cacheEntryCounter.Inc()
+	}
 	h.cache[index] = objCopy.(runtime.Object)
 	if len(h.cache) > maxEtcdCacheEntries {
 		var randomKey uint64
@@ -475,35 +508,22 @@ func (h *EtcdHelper) PrefixEtcdKey(key string) string {
 	return path.Join("/", h.PathPrefix, key)
 }
 
-// GetEtcdVersion performs a version check against the provided Etcd server, returning a triplet
-// of the release version, internal version, and error (if any).
-func GetEtcdVersion(host string) (releaseVersion, internalVersion string, err error) {
+// GetEtcdVersion performs a version check against the provided Etcd server,
+// returning the string response, and error (if any).
+func GetEtcdVersion(host string) (string, error) {
 	response, err := http.Get(host + "/version")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	defer response.Body.Close()
-
-	body, err := ioutil.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unsuccessful response from etcd server %q: %v", host, err)
+	}
+	versionBytes, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-
-	var dat map[string]interface{}
-	if err := json.Unmarshal(body, &dat); err != nil {
-		return "", "", fmt.Errorf("unknown server: %s", string(body))
-	}
-	if obj := dat["releaseVersion"]; obj != nil {
-		if s, ok := obj.(string); ok {
-			releaseVersion = s
-		}
-	}
-	if obj := dat["internalVersion"]; obj != nil {
-		if s, ok := obj.(string); ok {
-			internalVersion = s
-		}
-	}
-	return
+	return string(versionBytes), nil
 }
 
 func startEtcd() (*exec.Cmd, error) {
@@ -516,7 +536,7 @@ func startEtcd() (*exec.Cmd, error) {
 }
 
 func NewEtcdClientStartServerIfNecessary(server string) (EtcdClient, error) {
-	_, _, err := GetEtcdVersion(server)
+	_, err := GetEtcdVersion(server)
 	if err != nil {
 		glog.Infof("Failed to find etcd, attempting to start.")
 		_, err := startEtcd()

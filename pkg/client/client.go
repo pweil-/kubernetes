@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ type Interface interface {
 	EventNamespacer
 	LimitRangesNamespacer
 	ResourceQuotasNamespacer
+	ServiceAccountsNamespacer
 	SecretsNamespacer
 	NamespacesInterface
 	PersistentVolumesInterface
@@ -75,6 +76,10 @@ func (c *Client) LimitRanges(namespace string) LimitRangeInterface {
 
 func (c *Client) ResourceQuotas(namespace string) ResourceQuotaInterface {
 	return newResourceQuotas(c, namespace)
+}
+
+func (c *Client) ServiceAccounts(namespace string) ServiceAccountsInterface {
+	return newServiceAccounts(c, namespace)
 }
 
 func (c *Client) Secrets(namespace string) SecretsInterface {

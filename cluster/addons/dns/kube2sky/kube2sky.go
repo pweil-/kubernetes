@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	kfields "github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	klabels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	tools "github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
 	kwatch "github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 	etcd "github.com/coreos/go-etcd/etcd"
 	skymsg "github.com/skynetservices/skydns/msg"
@@ -106,7 +107,7 @@ func mutateEtcdOrDie(mutator func() error) {
 func newEtcdClient() (client *etcd.Client) {
 	maxConnectRetries := 12
 	for maxConnectRetries > 0 {
-		if _, _, err := tools.GetEtcdVersion(*etcd_server); err != nil {
+		if _, err := tools.GetEtcdVersion(*etcd_server); err != nil {
 			log.Fatalf("Failed to connect to etcd server: %v, error: %v", *etcd_server, err)
 			if maxConnectRetries > 0 {
 				log.Println("Retrying request after 5 second sleep.")
@@ -120,12 +121,21 @@ func newEtcdClient() (client *etcd.Client) {
 			break
 		}
 	}
-	client = etcd.NewClient([]string{*etcd_server})
-	if client == nil {
-		return nil
+	// loop until we have > 0 machines && machines[0] != ""
+	poll, timeout := 1*time.Second, 10*time.Second
+	if err := wait.Poll(poll, timeout, func() (bool, error) {
+		if client = etcd.NewClient([]string{*etcd_server}); client == nil {
+			log.Fatal("etcd.NewClient returned nil")
+		}
+		client.SyncCluster()
+		machines := client.GetCluster()
+		if len(machines) == 0 || len(machines[0]) == 0 {
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		log.Fatalf("Timed out after %s waiting for at least 1 synchronized etcd server in the cluster", timeout)
 	}
-	client.SyncCluster()
-
 	return client
 }
 

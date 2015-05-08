@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2014 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@ else
 fi
 
 NODE_INSTANCE_PREFIX="${INSTANCE_PREFIX}-minion"
+
+ALLOCATE_NODE_CIDRS=true
 
 KUBE_PROMPT_FOR_UPDATE=y
 KUBE_SKIP_UPDATE=${KUBE_SKIP_UPDATE-"n"}
@@ -132,6 +134,41 @@ function detect-project () {
   fi
 }
 
+function sha1sum-file() {
+  if which shasum >/dev/null 2>&1; then
+    shasum -a1 "$1" | awk '{ print $1 }'
+  else
+    sha1sum "$1" | awk '{ print $1 }'
+  fi
+}
+
+function already-staged() {
+  local -r file=$1
+  local -r newsum=$2
+
+  [[ -e "${file}.sha1" ]] || return 1
+
+  local oldsum
+  oldsum=$(cat "${file}.sha1")
+
+  [[ "${oldsum}" == "${newsum}" ]]
+}
+
+# Copy a release tar, if we don't already think it's staged in GCS
+function copy-if-not-staged() {
+  local -r staging_path=$1
+  local -r gs_url=$2
+  local -r tar=$3
+  local -r hash=$4
+
+  if already-staged "${tar}" "${hash}"; then
+    echo "+++ $(basename ${tar}) already staged ('rm ${tar}.sha1' to force)"
+  else
+    echo "${server_hash}" > "${tar}.sha1"
+    gsutil -m -q -h "Cache-Control:private, max-age=0" cp "${tar}" "${tar}.sha1" "${staging_path}"
+    gsutil -m acl ch -g all:R "${gs_url}" "${gs_url}.sha1" >/dev/null 2>&1
+  fi
+}
 
 # Take the local tar files and upload them to Google Storage.  They will then be
 # downloaded by the master as part of the start up script for the master.
@@ -153,6 +190,7 @@ function upload-server-tars() {
   else
     project_hash=$(echo -n "$PROJECT" | md5sum | awk '{ print $1 }')
   fi
+
   # This requires 1 million projects before the probability of collision is 50%
   # that's probably good enough for now :P
   project_hash=${project_hash:0:10}
@@ -167,13 +205,16 @@ function upload-server-tars() {
 
   local -r staging_path="${staging_bucket}/devel"
 
+  local server_hash
+  local salt_hash
+  server_hash=$(sha1sum-file "${SERVER_BINARY_TAR}")
+  salt_hash=$(sha1sum-file "${SALT_TAR}")
+
   echo "+++ Staging server tars to Google Storage: ${staging_path}"
   local server_binary_gs_url="${staging_path}/${SERVER_BINARY_TAR##*/}"
-  gsutil -q -h "Cache-Control:private, max-age=0" cp "${SERVER_BINARY_TAR}" "${server_binary_gs_url}"
-  gsutil acl ch -g all:R "${server_binary_gs_url}" >/dev/null 2>&1
   local salt_gs_url="${staging_path}/${SALT_TAR##*/}"
-  gsutil -q -h "Cache-Control:private, max-age=0" cp "${SALT_TAR}" "${salt_gs_url}"
-  gsutil acl ch -g all:R "${salt_gs_url}" >/dev/null 2>&1
+  copy-if-not-staged "${staging_path}" "${server_binary_gs_url}" "${SERVER_BINARY_TAR}" "${server_hash}"
+  copy-if-not-staged "${staging_path}" "${salt_gs_url}" "${SALT_TAR}" "${salt_hash}"
 
   # Convert from gs:// URL to an https:// URL
   SERVER_BINARY_TAR_URL="${server_binary_gs_url/gs:\/\//https://storage.googleapis.com/}"
@@ -329,31 +370,6 @@ function create-firewall-rule {
           exit 2
         fi
         echo -e "${color_yellow}Attempt $(($attempt+1)) failed to create firewall rule $1. Retrying.${color_norm}"
-        attempt=$(($attempt+1))
-    else
-        break
-    fi
-  done
-}
-
-# Robustly try to create a route.
-# $1: The name of the route.
-# $2: IP range.
-function create-route {
-  detect-project
-  local attempt=0
-  while true; do
-    if ! gcloud compute routes create "$1" \
-      --project "${PROJECT}" \
-      --destination-range "$2" \
-      --network "${NETWORK}" \
-      --next-hop-instance "$1" \
-      --next-hop-instance-zone "${ZONE}"; then
-        if (( attempt > 5 )); then
-          echo -e "${color_red}Failed to create route $1 ${color_norm}"
-          exit 2
-        fi
-        echo -e "${color_yellow}Attempt $(($attempt+1)) failed to create route $1. Retrying.${color_norm}"
         attempt=$(($attempt+1))
     else
         break
@@ -569,23 +585,6 @@ function kube-up {
   # to gcloud's deficiency.
   wait-for-minions-to-run
   detect-minion-names
-
-  # Create the routes and set IP ranges to instance metadata, 5 instances at a time.
-  for (( i=0; i<${#MINION_NAMES[@]}; i++)); do
-    create-route "${MINION_NAMES[$i]}" "${MINION_IP_RANGES[$i]}" &
-    add-instance-metadata "${MINION_NAMES[$i]}" "node-ip-range=${MINION_IP_RANGES[$i]}" &
-
-    if [ $i -ne 0 ] && [ $((i%5)) -eq 0 ]; then
-      echo Waiting for a batch of routes at $i...
-      wait-for-jobs
-    fi
-
-  done
-  create-route "${MASTER_NAME}" "${MASTER_IP_RANGE}"
-
-  # Wait for last batch of jobs.
-  wait-for-jobs
-
   detect-master
 
   echo "Waiting for cluster initialization."

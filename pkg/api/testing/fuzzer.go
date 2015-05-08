@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -115,12 +115,14 @@ func FuzzerFor(t *testing.T, version string, src rand.Source) *fuzz.Fuzzer {
 		},
 		func(j *api.List, c fuzz.Continue) {
 			c.FuzzNoCustom(j) // fuzz self without calling this function again
-			if j.Items == nil {
+			// TODO: uncomment when round trip starts from a versioned object
+			if false { //j.Items == nil {
 				j.Items = []runtime.Object{}
 			}
 		},
 		func(j *runtime.Object, c fuzz.Continue) {
-			if c.RandBool() {
+			// TODO: uncomment when round trip starts from a versioned object
+			if true { //c.RandBool() {
 				*j = &runtime.Unknown{
 					TypeMeta: runtime.TypeMeta{Kind: "Something", APIVersion: "unknown"},
 					RawJSON:  []byte(`{"apiVersion":"unknown","kind":"Something","someKey":"someValue"}`),
@@ -194,13 +196,24 @@ func FuzzerFor(t *testing.T, version string, src rand.Source) *fuzz.Fuzzer {
 				ev.Value = c.RandString()
 			} else {
 				ev.ValueFrom = &api.EnvVarSource{}
-				ev.ValueFrom.FieldPath = &api.ObjectFieldSelector{}
+				ev.ValueFrom.FieldRef = &api.ObjectFieldSelector{}
 
 				versions := []string{"v1beta1", "v1beta2", "v1beta3"}
 
-				ev.ValueFrom.FieldPath.APIVersion = versions[c.Rand.Intn(len(versions))]
-				ev.ValueFrom.FieldPath.FieldPath = c.RandString()
+				ev.ValueFrom.FieldRef.APIVersion = versions[c.Rand.Intn(len(versions))]
+				ev.ValueFrom.FieldRef.FieldPath = c.RandString()
 			}
+		},
+		func(sc *api.SecurityContext, c fuzz.Continue) {
+			c.FuzzNoCustom(sc) // fuzz self without calling this function again
+			priv := c.RandBool()
+			sc.Privileged = &priv
+			sc.Capabilities = &api.Capabilities{
+				Add:  make([]api.CapabilityType, 0),
+				Drop: make([]api.CapabilityType, 0),
+			}
+			c.Fuzz(&sc.Capabilities.Add)
+			c.Fuzz(&sc.Capabilities.Drop)
 		},
 		func(e *api.Event, c fuzz.Continue) {
 			c.FuzzNoCustom(e) // fuzz self without calling this function again

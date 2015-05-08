@@ -6380,6 +6380,14 @@
         "description": "object name and auth scope, such as for teams and projects",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "v1beta1.DeleteOptions",
+        "paramType": "body",
+        "name": "body",
+        "description": "",
+        "required": true,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -7226,10 +7234,6 @@
      }
     }
    },
-   "uint64": {
-    "id": "",
-    "properties": null
-   },
    "v1beta1.AWSElasticBlockStoreVolumeSource": {
     "id": "v1beta1.AWSElasticBlockStoreVolumeSource",
     "required": [
@@ -7307,8 +7311,8 @@
       "description": "name of the pod to bind"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -7415,8 +7419,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -7474,8 +7478,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -7497,7 +7501,7 @@
     "properties": {
      "capabilities": {
       "$ref": "v1beta1.Capabilities",
-      "description": "capabilities for container; cannot be updated"
+      "description": "capabilities for container; cannot be updated; deprecated; See SecurityContext"
      },
      "command": {
       "type": "array",
@@ -7559,7 +7563,7 @@
      },
      "privileged": {
       "type": "boolean",
-      "description": "whether or not the container is granted privileged status; defaults to false; cannot be updated"
+      "description": "whether or not the container is granted privileged status; defaults to false; cannot be updated; deprecated; See SecurityContext"
      },
      "readinessProbe": {
       "$ref": "v1beta1.LivenessProbe",
@@ -7568,6 +7572,10 @@
      "resources": {
       "$ref": "v1beta1.ResourceRequirements",
       "description": "Compute Resources required by this container; cannot be updated"
+     },
+     "securityContext": {
+      "$ref": "v1beta1.SecurityContext",
+      "description": "security options the pod should run with"
      },
      "terminationMessagePath": {
       "type": "string",
@@ -7617,6 +7625,11 @@
      "restartPolicy": {
       "$ref": "v1beta1.RestartPolicy",
       "description": "restart policy for all containers within the pod; one of RestartPolicyAlways, RestartPolicyOnFailure, RestartPolicyNever"
+     },
+     "terminationGracePeriodSeconds": {
+      "type": "integer",
+      "format": "int64",
+      "description": "optional duration in seconds the pod needs to terminate gracefully; may be decreased in delete request; value must be non-negative integer; the value zero indicates delete immediately; if this value is not set, the default grace period will be used instead; the grace period is the duration in seconds after the processes running in the pod are sent a termination signal and the time when the processes are forcibly halted with a kill signal; set this value longer than the expected cleanup time for your process"
      },
      "uuid": {
       "type": "string",
@@ -7692,7 +7705,8 @@
       "description": "an optional prefix to use to generate a unique name; has the same validation rules as name; optional, and is applied only name if is not specified"
      },
      "gracePeriodSeconds": {
-      "$ref": "int64",
+      "type": "integer",
+      "format": "int64",
       "description": "the duration in seconds to wait before deleting this object; defaults to a per object value if not specified; zero means delete immediately"
      },
      "id": {
@@ -7708,8 +7722,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -7752,40 +7766,17 @@
    "v1beta1.EndpointObjectReference": {
     "id": "v1beta1.EndpointObjectReference",
     "required": [
-     "endpoint"
+     "endpoint",
+     "targetRef"
     ],
     "properties": {
-     "apiVersion": {
-      "type": "string",
-      "description": "API version of the referent"
-     },
      "endpoint": {
       "type": "string",
       "description": "endpoint exposed by the referenced object"
      },
-     "fieldPath": {
-      "type": "string",
-      "description": "if referring to a piece of an object instead of an entire object, this string should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2]"
-     },
-     "kind": {
-      "type": "string",
-      "description": "kind of the referent"
-     },
-     "name": {
-      "type": "string",
-      "description": "id of the referent"
-     },
-     "namespace": {
-      "type": "string",
-      "description": "namespace of the referent"
-     },
-     "resourceVersion": {
-      "type": "string",
-      "description": "specific resourceVersion to which this reference is made, if any: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
-     },
-     "uid": {
-      "type": "string",
-      "description": "uid of the referent"
+     "targetRef": {
+      "$ref": "v1beta1.ObjectReference",
+      "description": "reference to the object providing the entry point"
      }
     }
    },
@@ -7880,8 +7871,8 @@
       "description": "IP protocol for the first set of endpoint ports; must be UDP or TCP; TCP if unspecified"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -7953,8 +7944,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -7983,6 +7974,22 @@
      "value": {
       "type": "string",
       "description": "value of the environment variable; defaults to empty string"
+     },
+     "valueFrom": {
+      "$ref": "v1beta1.EnvVarSource",
+      "description": "source for the environment variable's value; cannot be used if value is not empty"
+     }
+    }
+   },
+   "v1beta1.EnvVarSource": {
+    "id": "v1beta1.EnvVarSource",
+    "required": [
+     "fieldRef"
+    ],
+    "properties": {
+     "fieldRef": {
+      "$ref": "v1beta1.ObjectFieldSelector",
+      "description": "selects a field of the pod; only name and namespace are supported"
      }
     }
    },
@@ -8051,8 +8058,8 @@
       "description": "short, machine understandable string that gives the reason for the transition into the object's current status"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8122,8 +8129,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8335,8 +8342,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8419,8 +8426,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8526,8 +8533,8 @@
       "description": "IP range assigned to the node"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "resources": {
       "$ref": "v1beta1.NodeResources",
@@ -8604,8 +8611,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8678,8 +8685,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8745,8 +8752,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -8875,13 +8882,9 @@
      "osImage",
      "containerRuntimeVersion",
      "kubeletVersion",
-     "KubeProxyVersion"
+     "kubeProxyVersion"
     ],
     "properties": {
-     "KubeProxyVersion": {
-      "type": "string",
-      "description": "Kube-proxy version reported by the node"
-     },
      "bootID": {
       "type": "string",
       "description": "boot id is the boot-id reported by the node"
@@ -8893,6 +8896,10 @@
      "kernelVersion": {
       "type": "string",
       "description": "Kernel version reported by the node from 'uname -r' (e.g. 3.16.0-0.bpo.4-amd64)"
+     },
+     "kubeProxyVersion": {
+      "type": "string",
+      "description": "Kube-proxy version reported by the node"
      },
      "kubeletVersion": {
       "type": "string",
@@ -8909,6 +8916,22 @@
      "systemUUID": {
       "type": "string",
       "description": "system uuid is the system-uuid reported by the node"
+     }
+    }
+   },
+   "v1beta1.ObjectFieldSelector": {
+    "id": "v1beta1.ObjectFieldSelector",
+    "required": [
+     "fieldPath"
+    ],
+    "properties": {
+     "apiVersion": {
+      "type": "string",
+      "description": "version of the schema that fieldPath is written in terms of; defaults to v1beta1"
+     },
+     "fieldPath": {
+      "type": "string",
+      "description": "path of the field to select in the specified API version"
      }
     }
    },
@@ -8937,7 +8960,7 @@
      },
      "resourceVersion": {
       "type": "string",
-      "description": "specific resourceVersion to which this reference is made, if any: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "description": "specific resourceVersion to which this reference is made, if any: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "uid": {
       "type": "string",
@@ -8981,8 +9004,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9038,8 +9061,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9100,8 +9123,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9209,8 +9232,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9325,8 +9348,8 @@
       "description": "selector which must match a node's labels for the pod to be scheduled on that node"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9401,8 +9424,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9523,8 +9546,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9582,8 +9605,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9656,8 +9679,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9723,8 +9746,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9767,7 +9790,7 @@
      },
      "requests": {
       "type": "any",
-      "description": "Minimum amount of resources requested"
+      "description": "Minimum amount of resources requested; requests are honored only for persistent volumes as of now"
      }
     }
    },
@@ -9799,6 +9822,27 @@
    "v1beta1.RestartPolicyOnFailure": {
     "id": "v1beta1.RestartPolicyOnFailure",
     "properties": {}
+   },
+   "v1beta1.SELinuxOptions": {
+    "id": "v1beta1.SELinuxOptions",
+    "properties": {
+     "level": {
+      "type": "string",
+      "description": "the level label to apply to the container"
+     },
+     "role": {
+      "type": "string",
+      "description": "the role label to apply to the container"
+     },
+     "type": {
+      "type": "string",
+      "description": "the type label to apply to the container"
+     },
+     "user": {
+      "type": "string",
+      "description": "the user label to apply to the container"
+     }
+    }
    },
    "v1beta1.Secret": {
     "id": "v1beta1.Secret",
@@ -9840,8 +9884,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9903,8 +9947,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -9925,6 +9969,28 @@
      "target": {
       "$ref": "v1beta1.ObjectReference",
       "description": "target is a reference to a secret"
+     }
+    }
+   },
+   "v1beta1.SecurityContext": {
+    "id": "v1beta1.SecurityContext",
+    "properties": {
+     "capabilities": {
+      "$ref": "v1beta1.Capabilities",
+      "description": "the linux capabilites that should be added or removed"
+     },
+     "privileged": {
+      "type": "boolean",
+      "description": "run the container in privileged mode"
+     },
+     "runAsUser": {
+      "type": "integer",
+      "format": "int64",
+      "description": "the user id that runs the first process in the container"
+     },
+     "seLinuxOptions": {
+      "$ref": "v1beta1.SELinuxOptions",
+      "description": "options that control the SELinux labels applied"
      }
     }
    },
@@ -10017,8 +10083,8 @@
       "description": "externally visible IPs (e.g. load balancers) that should be proxied to this service"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selector": {
       "type": "any",
@@ -10084,8 +10150,8 @@
       "description": "namespace to which the object belongs; must be a DNS_SUBDOMAIN; 'default' by default; cannot be updated"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",
@@ -10178,8 +10244,8 @@
       "description": "machine-readable description of why this operation is in the 'Failure' status; if this value is empty there is no information available; a reason clarifies an HTTP status code but does not override it"
      },
      "resourceVersion": {
-      "$ref": "uint64",
-      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/api-conventions.md#concurrency-control-and-consistency"
+      "type": "integer",
+      "description": "string that identifies the internal version of this object that can be used by clients to determine when objects have changed; populated by the system, read-only; value must be treated as opaque by clients and passed unmodified back to the server: http://docs.k8s.io/api-conventions.md#concurrency-control-and-consistency"
      },
      "selfLink": {
       "type": "string",

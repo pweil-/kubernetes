@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 )
 
 func TestRunStop(t *testing.T) {
-	o := testclient.NewObjects(api.Scheme)
+	o := testclient.NewObjects(api.Scheme, api.Scheme)
 	client := &testclient.Fake{ReactFn: testclient.ObjectReaction(o, latest.RESTMapper)}
 	binder := NewPersistentVolumeClaimBinder(client, 1*time.Second)
 
@@ -111,8 +111,8 @@ func TestExampleObjects(t *testing.T) {
 	}
 
 	for name, scenario := range scenarios {
-		o := testclient.NewObjects(api.Scheme)
-		if err := testclient.AddObjectsFromPath("../../examples/persistent-volumes/"+name, o); err != nil {
+		o := testclient.NewObjects(api.Scheme, api.Scheme)
+		if err := testclient.AddObjectsFromPath("../../examples/persistent-volumes/"+name, o, api.Scheme); err != nil {
 			t.Fatal(err)
 		}
 
@@ -168,11 +168,11 @@ func TestExampleObjects(t *testing.T) {
 
 func TestBindingWithExamples(t *testing.T) {
 	api.ForTesting_ReferencesAllowBlankSelfLinks = true
-	o := testclient.NewObjects(api.Scheme)
-	if err := testclient.AddObjectsFromPath("../../examples/persistent-volumes/claims/claim-01.yaml", o); err != nil {
+	o := testclient.NewObjects(api.Scheme, api.Scheme)
+	if err := testclient.AddObjectsFromPath("../../examples/persistent-volumes/claims/claim-01.yaml", o, api.Scheme); err != nil {
 		t.Fatal(err)
 	}
-	if err := testclient.AddObjectsFromPath("../../examples/persistent-volumes/volumes/local-01.yaml", o); err != nil {
+	if err := testclient.AddObjectsFromPath("../../examples/persistent-volumes/volumes/local-01.yaml", o, api.Scheme); err != nil {
 		t.Fatal(err)
 	}
 

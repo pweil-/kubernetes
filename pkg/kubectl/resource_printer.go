@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -247,7 +247,7 @@ func (h *HumanReadablePrinter) HandledResources() []string {
 var podColumns = []string{"POD", "IP", "CONTAINER(S)", "IMAGE(S)", "HOST", "LABELS", "STATUS", "CREATED", "MESSAGE"}
 var podTemplateColumns = []string{"TEMPLATE", "CONTAINER(S)", "IMAGE(S)", "PODLABELS"}
 var replicationControllerColumns = []string{"CONTROLLER", "CONTAINER(S)", "IMAGE(S)", "SELECTOR", "REPLICAS"}
-var serviceColumns = []string{"NAME", "LABELS", "SELECTOR", "IP", "PORT(S)"}
+var serviceColumns = []string{"NAME", "LABELS", "SELECTOR", "IP(S)", "PORT(S)"}
 var endpointColumns = []string{"NAME", "ENDPOINTS"}
 var nodeColumns = []string{"NAME", "LABELS", "STATUS"}
 var statusColumns = []string{"STATUS"}
@@ -256,6 +256,7 @@ var limitRangeColumns = []string{"NAME"}
 var resourceQuotaColumns = []string{"NAME"}
 var namespaceColumns = []string{"NAME", "LABELS", "STATUS"}
 var secretColumns = []string{"NAME", "TYPE", "DATA"}
+var serviceAccountColumns = []string{"NAME", "SECRETS"}
 var persistentVolumeColumns = []string{"NAME", "LABELS", "CAPACITY", "ACCESSMODES", "STATUS", "CLAIM"}
 var persistentVolumeClaimColumns = []string{"NAME", "LABELS", "STATUS", "VOLUME"}
 var componentStatusColumns = []string{"NAME", "STATUS", "MESSAGE", "ERROR"}
@@ -285,6 +286,8 @@ func (h *HumanReadablePrinter) addDefaultHandlers() {
 	h.Handler(namespaceColumns, printNamespaceList)
 	h.Handler(secretColumns, printSecret)
 	h.Handler(secretColumns, printSecretList)
+	h.Handler(serviceAccountColumns, printServiceAccount)
+	h.Handler(serviceAccountColumns, printServiceAccountList)
 	h.Handler(persistentVolumeClaimColumns, printPersistentVolumeClaim)
 	h.Handler(persistentVolumeClaimColumns, printPersistentVolumeClaimList)
 	h.Handler(persistentVolumeColumns, printPersistentVolume)
@@ -591,6 +594,21 @@ func printSecret(item *api.Secret, w io.Writer) error {
 func printSecretList(list *api.SecretList, w io.Writer) error {
 	for _, item := range list.Items {
 		if err := printSecret(&item, w); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func printServiceAccount(item *api.ServiceAccount, w io.Writer) error {
+	_, err := fmt.Fprintf(w, "%s\t%d\n", item.Name, len(item.Secrets))
+	return err
+}
+
+func printServiceAccountList(list *api.ServiceAccountList, w io.Writer) error {
+	for _, item := range list.Items {
+		if err := printServiceAccount(&item, w); err != nil {
 			return err
 		}
 	}

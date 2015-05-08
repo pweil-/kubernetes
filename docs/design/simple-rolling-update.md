@@ -38,7 +38,7 @@ it is assumed that the rollout is nearly completed, and ```foo-next``` is rename
 ### Aborting a rollout
 Abort is assumed to want to reverse a rollout in progress.
 
-```kubectl rolling-update rc foo [foo-v2] --abort```
+```kubectl rolling-update rc foo [foo-v2] --rollback```
 
 This is really just semantic sugar for:
 
@@ -57,7 +57,6 @@ then ```foo-next``` is synthesized using the pattern ```<controller-name>-<hash-
 #### Initialization
    * If ```foo``` and ```foo-next``` do not exist:
       * Exit, and indicate an error to the user, that the specified controller doesn't exist.
-      * Goto Rollout
    * If ```foo``` exists, but ```foo-next``` does not:
       * Create ```foo-next``` populate it with the ```v2``` image, set ```desired-replicas``` to ```foo.Spec.Replicas```
       * Goto Rollout

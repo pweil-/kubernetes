@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2014 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,8 +36,12 @@ dns_domain: '$(echo "$DNS_DOMAIN" | sed -e "s/'/''/g")'
 admission_control: '$(echo "$ADMISSION_CONTROL" | sed -e "s/'/''/g")'
 EOF
 
-mkdir -p /srv/salt-overlay/salt/nginx
-echo $MASTER_HTPASSWD > /srv/salt-overlay/salt/nginx/htpasswd
+readonly BASIC_AUTH_FILE="/srv/salt-overlay/salt/kube-apiserver/basic_auth.csv"
+if [ ! -e "${BASIC_AUTH_FILE}" ]; then
+  mkdir -p /srv/salt-overlay/salt/kube-apiserver
+  (umask 077;
+    echo "${KUBE_PASSWORD},${KUBE_USER},admin" > "${BASIC_AUTH_FILE}")
+fi
 
 # Generate and distribute a shared secret (bearer token) to
 # apiserver and the nodes so that kubelet and kube-proxy can
@@ -48,9 +52,9 @@ kube_proxy_token=$(cat /dev/urandom | base64 | tr -d "=+/" | dd bs=32 count=1 2>
 
 # Make a list of tokens and usernames to be pushed to the apiserver
 mkdir -p /srv/salt-overlay/salt/kube-apiserver
-known_tokens_file="/srv/salt-overlay/salt/kube-apiserver/known_tokens.csv"
-(umask u=rw,go= ; echo "$kubelet_token,kubelet,kubelet" > $known_tokens_file ;
-echo "$kube_proxy_token,kube_proxy,kube_proxy" >> $known_tokens_file)
+readonly KNOWN_TOKENS_FILE="/srv/salt-overlay/salt/kube-apiserver/known_tokens.csv"
+(umask u=rw,go= ; echo "$kubelet_token,kubelet,kubelet" > $KNOWN_TOKENS_FILE ;
+echo "$kube_proxy_token,kube_proxy,kube_proxy" >> $KNOWN_TOKENS_FILE)
 
 mkdir -p /srv/salt-overlay/salt/kubelet
 kubelet_auth_file="/srv/salt-overlay/salt/kubelet/kubernetes_auth"

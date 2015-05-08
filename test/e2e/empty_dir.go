@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,16 +30,13 @@ import (
 
 var _ = Describe("emptyDir", func() {
 	var (
-		c         *client.Client
-		podClient client.PodInterface
+		c *client.Client
 	)
 
 	BeforeEach(func() {
 		var err error
 		c, err = loadClient()
 		expectNoError(err)
-
-		podClient = c.Pods(api.NamespaceDefault)
 	})
 
 	It("volume on tmpfs should have the correct mode", func() {

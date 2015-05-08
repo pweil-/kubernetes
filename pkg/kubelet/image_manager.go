@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,6 +38,9 @@ type imageManager interface {
 	// Applies the garbage collection policy. Errors include being unable to free
 	// enough space as per the garbage collection policy.
 	GarbageCollect() error
+
+	// Start async garbage collection of images.
+	Start() error
 
 	// TODO(vmarmol): Have this subsume pulls as well.
 }
@@ -104,15 +107,10 @@ func newImageManager(dockerClient dockertools.DockerInterface, cadvisorInterface
 		nodeRef:      nodeRef,
 	}
 
-	err := im.start()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start image manager: %v", err)
-	}
-
 	return im, nil
 }
 
-func (im *realImageManager) start() error {
+func (im *realImageManager) Start() error {
 	// Initial detection make detected time "unknown" in the past.
 	var zero time.Time
 	err := im.detectImages(zero)

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,7 +41,6 @@ import (
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/dockertools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/envvars"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/lifecycle"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/metrics"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/network"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/prober"
@@ -52,6 +51,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	utilErrors "github.com/GoogleCloudPlatform/kubernetes/pkg/util/errors"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/mount"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/version"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
@@ -60,8 +60,8 @@ import (
 )
 
 const (
-	// Max amount of time to wait for the Docker daemon to come up.
-	maxWaitForDocker = 5 * time.Minute
+	// Max amount of time to wait for the container runtime to come up.
+	maxWaitForContainerRuntime = 5 * time.Minute
 
 	// Initial node status update frequency and incremental frequency, for faster cluster startup.
 	// The update frequency will be increameted linearly, until it reaches status_update_frequency.
@@ -95,6 +95,20 @@ type SourcesReadyFn func() bool
 
 type volumeMap map[string]volume.Volume
 
+// Wait for the container runtime to be up with a timeout.
+func waitUntilRuntimeIsUp(cr kubecontainer.Runtime, timeout time.Duration) error {
+	var err error = nil
+	waitStart := time.Now()
+	for time.Since(waitStart) < timeout {
+		_, err = cr.Version()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return err
+}
+
 // New creates a new Kubelet for use in main
 func NewMainKubelet(
 	hostname string,
@@ -120,7 +134,10 @@ func NewMainKubelet(
 	cloud cloudprovider.Interface,
 	nodeStatusUpdateFrequency time.Duration,
 	resourceContainer string,
-	osInterface kubecontainer.OSInterface) (*Kubelet, error) {
+	osInterface kubecontainer.OSInterface,
+	cgroupRoot string,
+	containerRuntime string,
+	mounter mount.Interface) (*Kubelet, error) {
 	if rootDirectory == "" {
 		return nil, fmt.Errorf("invalid root directory %q", rootDirectory)
 	}
@@ -128,22 +145,6 @@ func NewMainKubelet(
 		return nil, fmt.Errorf("invalid sync frequency %d", resyncInterval)
 	}
 	dockerClient = dockertools.NewInstrumentedDockerInterface(dockerClient)
-
-	// Wait for the Docker daemon to be up (with a timeout).
-	waitStart := time.Now()
-	dockerUp := false
-	for time.Since(waitStart) < maxWaitForDocker {
-		_, err := dockerClient.Version()
-		if err == nil {
-			dockerUp = true
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-	if !dockerUp {
-		return nil, fmt.Errorf("timed out waiting for Docker to come up")
-	}
 
 	serviceStore := cache.NewStore(cache.MetaNamespaceKeyFunc)
 	if kubeClient != nil {
@@ -232,7 +233,8 @@ func NewMainKubelet(
 		resourceContainer:              resourceContainer,
 		os:                             osInterface,
 		oomWatcher:                     oomWatcher,
-		runtimeHooks:                   newKubeletRuntimeHooks(recorder),
+		cgroupRoot:                     cgroupRoot,
+		mounter:                        mounter,
 	}
 
 	if plug, err := network.InitNetworkPlugin(networkPlugins, networkPluginName, &networkHost{klet}); err != nil {
@@ -240,29 +242,38 @@ func NewMainKubelet(
 	} else {
 		klet.networkPlugin = plug
 	}
-	containerManager := dockertools.NewDockerManager(
-		dockerClient,
-		recorder,
-		readinessManager,
-		containerRefManager,
-		podInfraContainerImage,
-		pullQPS,
-		pullBurst,
-		containerLogsDir,
-		osInterface,
-		klet.networkPlugin,
-		nil)
-	klet.runner = containerManager
-	klet.containerManager = containerManager
 
+	// Initialize the runtime.
+	switch containerRuntime {
+	case "docker":
+		// Only supported one for now, continue.
+		klet.containerRuntime = dockertools.NewDockerManager(
+			dockerClient,
+			recorder,
+			readinessManager,
+			containerRefManager,
+			podInfraContainerImage,
+			pullQPS,
+			pullBurst,
+			containerLogsDir,
+			osInterface,
+			klet.networkPlugin,
+			klet,
+			klet.httpClient,
+			newKubeletRuntimeHooks(recorder))
+	default:
+		return nil, fmt.Errorf("unsupported container runtime %q specified", containerRuntime)
+	}
+
+	// Wait for the runtime to be up with a timeout.
+	if err := waitUntilRuntimeIsUp(klet.containerRuntime, maxWaitForContainerRuntime); err != nil {
+		return nil, fmt.Errorf("timed out waiting for %q to come up: %v", containerRuntime, err)
+	}
+
+	klet.runner = klet.containerRuntime
 	klet.podManager = newBasicPodManager(klet.kubeClient)
-	klet.prober = prober.New(klet.runner, klet.readinessManager, klet.containerRefManager, klet.recorder)
-	klet.handlerRunner = lifecycle.NewHandlerRunner(klet.httpClient, klet.runner, klet.containerManager)
 
-	// TODO(vmarmol): Remove when the circular dependency is removed :(
-	containerManager.Prober = klet.prober
-
-	runtimeCache, err := kubecontainer.NewRuntimeCache(containerManager)
+	runtimeCache, err := kubecontainer.NewRuntimeCache(klet.containerRuntime)
 	if err != nil {
 		return nil, err
 	}
@@ -340,12 +351,6 @@ type Kubelet struct {
 	// Network plugin.
 	networkPlugin network.NetworkPlugin
 
-	// Healthy check prober.
-	prober prober.Prober
-
-	// Container lifecycle handler runner.
-	handlerRunner kubecontainer.HandlerRunner
-
 	// Container readiness state manager.
 	readinessManager *kubecontainer.ReadinessManager
 
@@ -377,8 +382,8 @@ type Kubelet struct {
 	// Reference to this node.
 	nodeRef *api.ObjectReference
 
-	// Manage containers.
-	containerManager *dockertools.DockerManager
+	// Container runtime.
+	containerRuntime kubecontainer.Runtime
 
 	// nodeStatusUpdateFrequency specifies how often kubelet posts node status to master.
 	// Note: be cautious when changing the constant, it must work with nodeMonitorGracePeriod
@@ -392,6 +397,7 @@ type Kubelet struct {
 	//    status. Kubelet may fail to update node status reliablly if the value is too small,
 	//    as it takes time to gather all necessary node information.
 	nodeStatusUpdateFrequency time.Duration
+
 	// The name of the resource-only container to run the Kubelet in (empty for no container).
 	// Name must be absolute.
 	resourceContainer string
@@ -401,9 +407,11 @@ type Kubelet struct {
 	// Watcher of out of memory events.
 	oomWatcher OOMWatcher
 
-	// TODO(vmarmol): Remove this when we only have to inject the hooks into the runtimes.
-	// Hooks injected into the container runtime.
-	runtimeHooks kubecontainer.RuntimeHooks
+	// If non-empty, pass this to the container runtime as the root cgroup.
+	cgroupRoot string
+
+	// Mounter to use for volumes.
+	mounter mount.Interface
 }
 
 // getRootDir returns the full path to the directory under which kubelet can
@@ -592,6 +600,12 @@ func (kl *Kubelet) Run(updates <-chan PodUpdate) {
 		glog.Infof("Running in container %q", kl.resourceContainer)
 	}
 
+	err := kl.imageManager.Start()
+	if err != nil {
+		kl.recorder.Eventf(kl.nodeRef, "imageManagerFailed", "Failed to start ImageManager %v", err)
+		glog.Errorf("Failed to start ImageManager, images may not be garbage collected: %v", err)
+	}
+
 	go kl.syncNodeStatus()
 	// Run the system oom watcher forever.
 	go util.Until(kl.runOOMWatcher, time.Second, util.NeverStop)
@@ -652,8 +666,9 @@ func makeBinds(container *api.Container, podVolumes volumeMap) (binds []string) 
 func (kl *Kubelet) GenerateRunContainerOptions(pod *api.Pod, container *api.Container, netMode, ipcMode string) (*kubecontainer.RunContainerOptions, error) {
 	var err error
 	opts := &kubecontainer.RunContainerOptions{
-		NetMode: netMode,
-		IpcMode: ipcMode,
+		NetMode:      netMode,
+		IpcMode:      ipcMode,
+		CgroupParent: kl.cgroupRoot,
 	}
 
 	vol, ok := kl.volumeManager.GetVolumes(pod.UID)
@@ -789,8 +804,8 @@ func (kl *Kubelet) runtimeEnvVarValue(envVar api.EnvVar, pod *api.Pod) (string, 
 		return runtimeVal, nil
 	}
 
-	if envVar.ValueFrom != nil && envVar.ValueFrom.FieldPath != nil {
-		return kl.podFieldSelectorRuntimeValue(envVar.ValueFrom.FieldPath, pod)
+	if envVar.ValueFrom != nil && envVar.ValueFrom.FieldRef != nil {
+		return kl.podFieldSelectorRuntimeValue(envVar.ValueFrom.FieldRef, pod)
 	}
 
 	return runtimeVal, nil
@@ -865,32 +880,9 @@ func parseResolvConf(reader io.Reader) (nameservers []string, searches []string,
 	return nameservers, searches, nil
 }
 
-// Pull the image for the specified pod and container.
-func (kl *Kubelet) pullImage(pod *api.Pod, container *api.Container) error {
-	present, err := kl.containerManager.IsImagePresent(container.Image)
-	if err != nil {
-		ref, err := kubecontainer.GenerateContainerRef(pod, container)
-		if err != nil {
-			glog.Errorf("Couldn't make a ref to pod %v, container %v: '%v'", pod.Name, container.Name, err)
-		}
-		if ref != nil {
-			kl.recorder.Eventf(ref, "failed", "Failed to inspect image %q: %v", container.Image, err)
-		}
-		return fmt.Errorf("failed to inspect image %q: %v", container.Image, err)
-	}
-
-	if !kl.runtimeHooks.ShouldPullImage(pod, container, present) {
-		return nil
-	}
-
-	err = kl.containerManager.PullImage(container.Image)
-	kl.runtimeHooks.ReportImagePull(pod, container, err)
-	return err
-}
-
 // Kill all running containers in a pod (includes the pod infra container).
 func (kl *Kubelet) killPod(pod kubecontainer.Pod) error {
-	return kl.containerManager.KillPod(pod)
+	return kl.containerRuntime.KillPod(pod)
 }
 
 type empty struct{}
@@ -945,44 +937,6 @@ func (kl *Kubelet) syncPod(pod *api.Pod, mirrorPod *api.Pod, runningPod kubecont
 		return err
 	}
 
-	podStatus, err := kl.generatePodStatus(pod)
-	if err != nil {
-		glog.Errorf("Unable to get status for pod %q (uid %q): %v", podFullName, uid, err)
-		return err
-	}
-
-	containerChanges, err := kl.containerManager.ComputePodContainerChanges(pod, runningPod, podStatus)
-	glog.V(3).Infof("Got container changes for pod %q: %+v", podFullName, containerChanges)
-	if err != nil {
-		return err
-	}
-
-	if containerChanges.StartInfraContainer || (len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToStart) == 0) {
-		if len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToStart) == 0 {
-			glog.V(4).Infof("Killing Infra Container for %q because all other containers are dead.", podFullName)
-		} else {
-			glog.V(4).Infof("Killing Infra Container for %q, will start new one", podFullName)
-		}
-
-		// Killing phase: if we want to start new infra container, or nothing is running kill everything (including infra container)
-		err = kl.killPod(runningPod)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Otherwise kill any containers in this pod which are not specified as ones to keep.
-		for _, container := range runningPod.Containers {
-			_, keep := containerChanges.ContainersToKeep[kubeletTypes.DockerID(container.ID)]
-			if !keep {
-				glog.V(3).Infof("Killing unwanted container %+v", container)
-				err = kl.containerManager.KillContainer(container.ID)
-				if err != nil {
-					glog.Errorf("Error killing container: %v", err)
-				}
-			}
-		}
-	}
-
 	// Starting phase:
 	ref, err := api.GetReference(pod)
 	if err != nil {
@@ -1000,37 +954,15 @@ func (kl *Kubelet) syncPod(pod *api.Pod, mirrorPod *api.Pod, runningPod kubecont
 	}
 	kl.volumeManager.SetVolumes(pod.UID, podVolumes)
 
-	// If we should create infra container then we do it first.
-	podInfraContainerID := containerChanges.InfraContainerId
-	if containerChanges.StartInfraContainer && (len(containerChanges.ContainersToStart) > 0) {
-		glog.V(4).Infof("Creating pod infra container for %q", podFullName)
-		podInfraContainerID, err = kl.containerManager.CreatePodInfraContainer(pod, kl, kl.handlerRunner)
-
-		// Call the networking plugin
-		if err == nil {
-			err = kl.networkPlugin.SetUpPod(pod.Namespace, pod.Name, podInfraContainerID)
-		}
-		if err != nil {
-			glog.Errorf("Failed to create pod infra container: %v; Skipping pod %q", err, podFullName)
-			return err
-		}
+	podStatus, err := kl.generatePodStatus(pod)
+	if err != nil {
+		glog.Errorf("Unable to get status for pod %q (uid %q): %v", podFullName, uid, err)
+		return err
 	}
 
-	// Start everything
-	for container := range containerChanges.ContainersToStart {
-		glog.V(4).Infof("Creating container %+v", pod.Spec.Containers[container])
-		containerSpec := &pod.Spec.Containers[container]
-		if err := kl.pullImage(pod, containerSpec); err != nil {
-			glog.Warningf("Failed to pull image %q from pod %q and container %q: %v", containerSpec.Image, kubecontainer.GetPodFullName(pod), containerSpec.Name, err)
-			continue
-		}
-		// TODO(dawnchen): Check RestartPolicy.DelaySeconds before restart a container
-		namespaceMode := fmt.Sprintf("container:%v", podInfraContainerID)
-		_, err := kl.containerManager.RunContainer(pod, containerSpec, kl, kl.handlerRunner, namespaceMode, namespaceMode)
-		if err != nil {
-			// TODO(bburns) : Perhaps blacklist a container after N failures?
-			glog.Errorf("Error running pod %q container %q: %v", kubecontainer.GetPodFullName(pod), containerSpec.Name, err)
-		}
+	err = kl.containerRuntime.SyncPod(pod, runningPod, podStatus)
+	if err != nil {
+		return err
 	}
 
 	if isStaticPod(pod) {
@@ -1220,7 +1152,7 @@ func (kl *Kubelet) SyncPods(allPods []*api.Pod, podSyncTypes map[types.UID]metri
 	// in the cache. We need to bypass the cach to get the latest set of
 	// running pods to clean up the volumes.
 	// TODO: Evaluate the performance impact of bypassing the runtime cache.
-	runningPods, err = kl.containerManager.GetPods(false)
+	runningPods, err = kl.containerRuntime.GetPods(false)
 	if err != nil {
 		glog.Errorf("Error listing containers: %#v", err)
 		return err
@@ -1417,10 +1349,10 @@ func (kl *Kubelet) syncLoop(updates <-chan PodUpdate, handler SyncHandler) {
 
 // Returns the container runtime version for this Kubelet.
 func (kl *Kubelet) GetContainerRuntimeVersion() (kubecontainer.Version, error) {
-	if kl.containerManager == nil {
+	if kl.containerRuntime == nil {
 		return nil, fmt.Errorf("no container runtime")
 	}
-	return kl.containerManager.Version()
+	return kl.containerRuntime.Version()
 }
 
 func (kl *Kubelet) validatePodPhase(podStatus *api.PodStatus) error {
@@ -1446,6 +1378,7 @@ func (kl *Kubelet) validateContainerStatus(podStatus *api.PodStatus, containerNa
 // TODO: this method is returning logs of random container attempts, when it should be returning the most recent attempt
 // or all of them.
 func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName, tail string, follow bool, stdout, stderr io.Writer) error {
+	// TODO(vmarmol): Refactor to not need the pod status and verification.
 	podStatus, err := kl.GetPodStatus(podFullName)
 	if err != nil {
 		return fmt.Errorf("failed to get status for pod %q - %v", podFullName, err)
@@ -1460,7 +1393,11 @@ func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName, tail stri
 		// waiting state.
 		return err
 	}
-	return kl.containerManager.GetContainerLogs(containerID, tail, follow, stdout, stderr)
+	pod, ok := kl.GetPodByFullName(podFullName)
+	if !ok {
+		return fmt.Errorf("unable to get logs for container %q in pod %q: unable to find pod", containerName, podFullName)
+	}
+	return kl.containerRuntime.GetContainerLogs(pod, containerID, tail, follow, stdout, stderr)
 }
 
 // GetHostname Returns the hostname as the kubelet sees it.
@@ -1730,7 +1667,7 @@ func (kl *Kubelet) generatePodStatus(pod *api.Pod) (api.PodStatus, error) {
 	glog.V(3).Infof("Generating status for %q", podFullName)
 
 	spec := &pod.Spec
-	podStatus, err := kl.containerManager.GetPodStatus(pod)
+	podStatus, err := kl.containerRuntime.GetPodStatus(pod)
 
 	if err != nil {
 		// Error handling
@@ -1780,7 +1717,7 @@ func (kl *Kubelet) ServeLogs(w http.ResponseWriter, req *http.Request) {
 // It returns nil if not found.
 // TODO(yifan): Move this to runtime once the runtime interface has been all implemented.
 func (kl *Kubelet) findContainer(podFullName string, podUID types.UID, containerName string) (*kubecontainer.Container, error) {
-	pods, err := kl.containerManager.GetPods(false)
+	pods, err := kl.containerRuntime.GetPods(false)
 	if err != nil {
 		return nil, err
 	}
@@ -1832,7 +1769,7 @@ func (kl *Kubelet) PortForward(podFullName string, podUID types.UID, port uint16
 		return fmt.Errorf("no runner specified.")
 	}
 
-	pods, err := kl.containerManager.GetPods(false)
+	pods, err := kl.containerRuntime.GetPods(false)
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -68,9 +68,9 @@ func (plugin *awsElasticBlockStorePlugin) GetAccessModes() []api.AccessModeType 
 	}
 }
 
-func (plugin *awsElasticBlockStorePlugin) NewBuilder(spec *volume.Spec, podRef *api.ObjectReference, _ volume.VolumeOptions) (volume.Builder, error) {
+func (plugin *awsElasticBlockStorePlugin) NewBuilder(spec *volume.Spec, podRef *api.ObjectReference, _ volume.VolumeOptions, mounter mount.Interface) (volume.Builder, error) {
 	// Inject real implementations here, test through the internal function.
-	return plugin.newBuilderInternal(spec, podRef.UID, &AWSDiskUtil{}, mount.New())
+	return plugin.newBuilderInternal(spec, podRef.UID, &AWSDiskUtil{}, mounter)
 }
 
 func (plugin *awsElasticBlockStorePlugin) newBuilderInternal(spec *volume.Spec, podUID types.UID, manager pdManager, mounter mount.Interface) (volume.Builder, error) {
@@ -103,9 +103,9 @@ func (plugin *awsElasticBlockStorePlugin) newBuilderInternal(spec *volume.Spec, 
 	}, nil
 }
 
-func (plugin *awsElasticBlockStorePlugin) NewCleaner(volName string, podUID types.UID) (volume.Cleaner, error) {
+func (plugin *awsElasticBlockStorePlugin) NewCleaner(volName string, podUID types.UID, mounter mount.Interface) (volume.Cleaner, error) {
 	// Inject real implementations here, test through the internal function.
-	return plugin.newCleanerInternal(volName, podUID, &AWSDiskUtil{}, mount.New())
+	return plugin.newCleanerInternal(volName, podUID, &AWSDiskUtil{}, mounter)
 }
 
 func (plugin *awsElasticBlockStorePlugin) newCleanerInternal(volName string, podUID types.UID, manager pdManager, mounter mount.Interface) (volume.Cleaner, error) {

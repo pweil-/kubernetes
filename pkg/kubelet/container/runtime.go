@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 )
 
 type Version interface {
@@ -44,14 +43,10 @@ type Runtime interface {
 	// specifies whether the runtime returns all containers including those already
 	// exited and dead containers (used for garbage collection).
 	GetPods(all bool) ([]*Pod, error)
-	// RunPod starts all the containers of a pod within a namespace.
-	RunPod(*api.Pod, map[string]volume.Volume) error
+	// Syncs the running pod into the desired pod.
+	SyncPod(pod *api.Pod, runningPod Pod, podStatus api.PodStatus) error
 	// KillPod kills all the containers of a pod.
 	KillPod(pod Pod) error
-	// RunContainerInPod starts a container within the same namespace of a pod.
-	RunContainerInPod(api.Container, *api.Pod, map[string]volume.Volume) error
-	// KillContainerInPod kills a container in the pod.
-	KillContainerInPod(api.Container, *api.Pod) error
 	// GetPodStatus retrieves the status of the pod, including the information of
 	// all containers in the pod.
 	GetPodStatus(*api.Pod) (*api.PodStatus, error)
@@ -74,11 +69,12 @@ type Runtime interface {
 	ListImages() ([]Image, error)
 	// Removes the specified image.
 	RemoveImage(image string) error
+	// TODO(vmarmol): Unify pod and containerID args.
 	// GetContainerLogs returns logs of a specific container. By
 	// default, it returns a snapshot of the container log. Set 'follow' to true to
 	// stream the log. Set 'follow' to false and specify the number of lines (e.g.
 	// "100" or "all") to tail the log.
-	GetContainerLogs(containerID, tail string, follow bool, stdout, stderr io.Writer) (err error)
+	GetContainerLogs(pod *api.Pod, containerID, tail string, follow bool, stdout, stderr io.Writer) (err error)
 }
 
 // Customizable hooks injected into container runtimes.
@@ -197,6 +193,8 @@ type RunContainerOptions struct {
 	// into docker's container runtime.
 	NetMode string
 	IpcMode string
+	// The parent cgroup to pass to Docker
+	CgroupParent string
 }
 
 type Pods []*Pod

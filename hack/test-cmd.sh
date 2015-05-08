@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2014 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -126,25 +126,29 @@ for version in "${kube_api_versions[@]}"; do
       -s "http://127.0.0.1:${API_PORT}"
       --match-server-version
     )
-    [ "$(kubectl get minions -t $'{{ .apiVersion }}' "${kube_flags[@]}")" == "v1beta3" ]
+    [ "$(kubectl get minions -t '{{ .apiVersion }}' "${kube_flags[@]}")" == "v1beta3" ]
   else
     kube_flags=(
       -s "http://127.0.0.1:${API_PORT}"
       --match-server-version
       --api-version="${version}"
     )
-    [ "$(kubectl get minions -t $'{{ .apiVersion }}' "${kube_flags[@]}")" == "${version}" ]
+    [ "$(kubectl get minions -t '{{ .apiVersion }}' "${kube_flags[@]}")" == "${version}" ]
   fi
   id_field=".metadata.name"
   labels_field=".metadata.labels"
   service_selector_field=".spec.selector"
   rc_replicas_field=".spec.replicas"
+  rc_status_replicas_field=".status.replicas"
+  rc_container_image_field=".spec.template.spec.containers"
   port_field="(index .spec.ports 0).port"
   if [ "${version}" = "v1beta1" ] || [ "${version}" = "v1beta2" ]; then
     id_field=".id"
     labels_field=".labels"
     service_selector_field=".selector"
     rc_replicas_field=".desiredState.replicas"
+    rc_status_replicas_field=".currentState.replicas"
+    rc_container_image_field=".desiredState.podTemplate.desiredState.manifest.containers"
     port_field=".port"
   fi
 
@@ -541,6 +545,12 @@ __EOF__
   kubectl delete pod valid-pod "${kube_flags[@]}"
   kubectl delete service frontend{,-2,-3} "${kube_flags[@]}"
 
+  ### Perform a rolling update with --image
+  # Command
+  kubectl rolling-update frontend --image=kubernetes/pause --update-period=10ns --poll-interval=10ms "${kube_flags[@]}"
+  # Post-condition: current image IS kubernetes/pause
+  kube::test::get_object_assert 'rc frontend' '{{range \$c:=$rc_container_image_field}} {{\$c.image}} {{end}}' ' +kubernetes/pause +'
+
   ### Delete replication controller with id
   # Pre-condition: frontend replication controller is running
   kube::test::get_object_assert rc "{{range.items}}{{$id_field}}:{{end}}" 'frontend:'
@@ -625,7 +635,7 @@ __EOF__
   # Minions #
   ###########
 
-  if [[ "${version}" != "v1beta3" ]]; then
+  if [[ "${version}" = "v1beta1" ]] || [[ "${version}" = "v1beta2" ]]; then
     kube::log::status "Testing kubectl(${version}:minions)"
 
     kube::test::get_object_assert minions "{{range.items}}{{$id_field}}:{{end}}" '127.0.0.1:'
@@ -647,7 +657,7 @@ __EOF__
 
   #####################
   # Resource aliasing #
-  ##################### 
+  #####################
 
   kube::log::status "Testing resource aliasing"
   kubectl create -f examples/cassandra/cassandra.yaml "${kube_flags[@]}"

@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -63,6 +63,7 @@ import (
 	resourcequotaetcd "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/resourcequota/etcd"
 	secretetcd "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/secret/etcd"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/service"
+	serviceaccountetcd "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/serviceaccount/etcd"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/ui"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
@@ -389,6 +390,7 @@ func (m *Master) init(c *Config) {
 
 	resourceQuotaStorage, resourceQuotaStatusStorage := resourcequotaetcd.NewStorage(c.EtcdHelper)
 	secretStorage := secretetcd.NewStorage(c.EtcdHelper)
+	serviceAccountStorage := serviceaccountetcd.NewStorage(c.EtcdHelper)
 	persistentVolumeStorage, persistentVolumeStatusStorage := pvetcd.NewStorage(c.EtcdHelper)
 	persistentVolumeClaimStorage, persistentVolumeClaimStatusStorage := pvcetcd.NewStorage(c.EtcdHelper)
 
@@ -436,12 +438,13 @@ func (m *Master) init(c *Config) {
 		"namespaces/status":             namespaceStatusStorage,
 		"namespaces/finalize":           namespaceFinalizeStorage,
 		"secrets":                       secretStorage,
+		"serviceAccounts":               serviceAccountStorage,
 		"persistentVolumes":             persistentVolumeStorage,
 		"persistentVolumes/status":      persistentVolumeStatusStorage,
 		"persistentVolumeClaims":        persistentVolumeClaimStorage,
 		"persistentVolumeClaims/status": persistentVolumeClaimStatusStorage,
 
-		"componentStatuses": componentstatus.NewStorage(func() map[string]apiserver.Server { return m.getServersToValidate(c) }),
+		"componentStatuses": componentstatus.NewStorage(func() map[string]apiserver.Server { return m.getServersToValidate(c, false) }),
 	}
 
 	apiVersions := []string{"v1beta1", "v1beta2"}
@@ -477,8 +480,8 @@ func (m *Master) init(c *Config) {
 		m.mux.HandleFunc("/", apiserver.IndexHandler(m.handlerContainer, m.muxHelper))
 	}
 
-	// TODO: use go-restful
-	apiserver.InstallValidator(m.muxHelper, func() map[string]apiserver.Server { return m.getServersToValidate(c) })
+	// TODO: This is now deprecated. Should be removed once client dependencies are gone.
+	apiserver.InstallValidator(m.muxHelper, func() map[string]apiserver.Server { return m.getServersToValidate(c, true) })
 	if c.EnableLogsSupport {
 		apiserver.InstallLogsSupport(m.muxHelper)
 	}
@@ -580,7 +583,7 @@ func (m *Master) InstallSwaggerAPI() {
 	swagger.RegisterSwaggerService(swaggerConfig, m.handlerContainer)
 }
 
-func (m *Master) getServersToValidate(c *Config) map[string]apiserver.Server {
+func (m *Master) getServersToValidate(c *Config, includeNodes bool) map[string]apiserver.Server {
 	serversToValidate := map[string]apiserver.Server{
 		"controller-manager": {Addr: "127.0.0.1", Port: ports.ControllerManagerPort, Path: "/healthz"},
 		"scheduler":          {Addr: "127.0.0.1", Port: ports.SchedulerPort, Path: "/healthz"},
@@ -607,12 +610,14 @@ func (m *Master) getServersToValidate(c *Config) map[string]apiserver.Server {
 		}
 		serversToValidate[fmt.Sprintf("etcd-%d", ix)] = apiserver.Server{Addr: addr, Port: port, Path: "/v2/keys/"}
 	}
-	nodes, err := m.nodeRegistry.ListMinions(api.NewDefaultContext(), labels.Everything(), fields.Everything())
-	if err != nil {
-		glog.Errorf("Failed to list minions: %v", err)
-	}
-	for ix, node := range nodes.Items {
-		serversToValidate[fmt.Sprintf("node-%d", ix)] = apiserver.Server{Addr: node.Name, Port: ports.KubeletPort, Path: "/healthz", EnableHTTPS: true}
+	if includeNodes && m.nodeRegistry != nil {
+		nodes, err := m.nodeRegistry.ListMinions(api.NewDefaultContext(), labels.Everything(), fields.Everything())
+		if err != nil {
+			glog.Errorf("Failed to list minions: %v", err)
+		}
+		for ix, node := range nodes.Items {
+			serversToValidate[fmt.Sprintf("node-%d", ix)] = apiserver.Server{Addr: node.Name, Port: ports.KubeletPort, Path: "/healthz", EnableHTTPS: true}
+		}
 	}
 	return serversToValidate
 }

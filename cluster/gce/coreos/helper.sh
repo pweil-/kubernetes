@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2015 Google Inc. All rights reserved.
+# Copyright 2015 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,9 +28,11 @@ function build-kube-env {
 ENV_TIMESTAMP: $(yaml-quote $(date -u +%Y-%m-%dT%T%z))
 INSTANCE_PREFIX: $(yaml-quote ${INSTANCE_PREFIX})
 NODE_INSTANCE_PREFIX: $(yaml-quote ${NODE_INSTANCE_PREFIX})
+KUBE_GCE_CLUSTER_CLASS_B: $(yaml-quote ${KUBE_GCE_CLUSTER_CLASS_B:-10.244})
 SERVER_BINARY_TAR_URL: $(yaml-quote ${SERVER_BINARY_TAR_URL})
 SALT_TAR_URL: $(yaml-quote ${SALT_TAR_URL})
 PORTAL_NET: $(yaml-quote ${PORTAL_NET})
+ALLOCATE_NODE_CIDRS: $(yaml-quote ${ALLOCATE_NODE_CIDRS:-false})
 ENABLE_CLUSTER_MONITORING: $(yaml-quote ${ENABLE_CLUSTER_MONITORING:-false})
 ENABLE_NODE_MONITORING: $(yaml-quote ${ENABLE_NODE_MONITORING:-false})
 ENABLE_CLUSTER_LOGGING: $(yaml-quote ${ENABLE_CLUSTER_LOGGING:-false})
@@ -48,6 +50,7 @@ KUBELET_TOKEN: $(yaml-quote ${KUBELET_TOKEN:-})
 KUBE_PROXY_TOKEN: $(yaml-quote ${KUBE_PROXY_TOKEN:-})
 ADMISSION_CONTROL: $(yaml-quote ${ADMISSION_CONTROL:-})
 MASTER_IP_RANGE: $(yaml-quote ${MASTER_IP_RANGE})
+KUBERNETES_CONTAINER_RUNTIME: $(yaml-quote ${CONTAINER_RUNTIME})
 EOF
   else
     cat >>$file <<EOF
@@ -78,6 +81,7 @@ ZONE=$(yaml-quote ${ZONE})
 EXTRA_DOCKER_OPTS=$(yaml-quote ${EXTRA_DOCKER_OPTS})
 ENABLE_DOCKER_REGISTRY_CACHE=$(yaml-quote ${ENABLE_DOCKER_REGISTRY_CACHE:-false})
 PROJECT_ID=$(yaml-quote ${PROJECT})
+KUBERNETES_CONTAINER_RUNTIME=$(yaml-quote ${CONTAINER_RUNTIME})
 EOF
   fi
 }

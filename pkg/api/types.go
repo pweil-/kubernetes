@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -518,7 +518,7 @@ type EnvVar struct {
 // EnvVarSource represents a source for the value of an EnvVar.
 type EnvVarSource struct {
 	// Required: Selects a field of the pod; only name and namespace are supported.
-	FieldPath *ObjectFieldSelector `json:"fieldPath"`
+	FieldRef *ObjectFieldSelector `json:"fieldRef"`
 }
 
 // ObjectFieldSelector selects an APIVersioned field of an object.
@@ -594,6 +594,9 @@ type ResourceRequirements struct {
 	// Limits describes the maximum amount of compute resources required.
 	Limits ResourceList `json:"limits,omitempty"`
 	// Requests describes the minimum amount of compute resources required.
+	// Note: 'Requests' are honored only for Persistent Volumes as of now.
+	// TODO: Update the scheduler to use 'Requests' in addition to 'Limits'. If Request is omitted for a container,
+	// it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value
 	Requests ResourceList `json:"requests,omitempty"`
 }
 
@@ -620,12 +623,10 @@ type Container struct {
 	Lifecycle      *Lifecycle           `json:"lifecycle,omitempty"`
 	// Required.
 	TerminationMessagePath string `json:"terminationMessagePath,omitempty"`
-	// Optional: Default to false.
-	Privileged bool `json:"privileged,omitempty"`
 	// Required: Policy for pulling images for this container
 	ImagePullPolicy PullPolicy `json:"imagePullPolicy"`
-	// Optional: Capabilities for container.
-	Capabilities Capabilities `json:"capabilities,omitempty"`
+	// Optional: SecurityContext defines the security options the pod should be run with
+	SecurityContext *SecurityContext `json:"securityContext,omitempty" description:"security options the pod should run with"`
 }
 
 // Handler defines a specific action that should be taken
@@ -803,13 +804,17 @@ type PodSpec struct {
 	// Value must be non-negative integer. The value zero indicates delete immediately.
 	// If this value is nil, the default grace period will be used instead.
 	// The grace period is the duration in seconds after the processes running in the pod are sent
-	// a termination signal and the time when the processes are forcibly halted with a kill signal).
+	// a termination signal and the time when the processes are forcibly halted with a kill signal.
 	// Set this value longer than the expected cleanup time for your process.
 	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
 	// Required: Set DNS policy.
 	DNSPolicy DNSPolicy `json:"dnsPolicy,omitempty"`
 	// NodeSelector is a selector which must be true for the pod to fit on a node
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// ServiceAccount is the name of the ServiceAccount to use to run this pod
+	// The pod will be allowed to use secrets referenced by the ServiceAccount
+	ServiceAccount string `json:"serviceAccount"`
 
 	// Host is a request to schedule this pod onto a specific host.  If it is non-empty,
 	// the the scheduler simply schedules this pod onto that host, assuming that it fits
@@ -1030,6 +1035,31 @@ type Service struct {
 
 	// Status represents the current status of a service.
 	Status ServiceStatus `json:"status,omitempty"`
+}
+
+// ServiceAccount binds together:
+// * a name, understood by users, and perhaps by peripheral systems, for an identity
+// * a principal that can be authenticated and authorized
+// * a set of secrets
+// * security context constraints
+type ServiceAccount struct {
+	TypeMeta   `json:",inline"`
+	ObjectMeta `json:"metadata,omitempty"`
+
+	// Secrets is the list of secrets allowed to be used by pods running using this ServiceAccount
+	Secrets []ObjectReference `json:"secrets"`
+
+	// SecurityContextConstraints governs the ability to make requests that affect the SecurityContext that will
+	// be applied to a container.
+	SecurityContextConstraints *SecurityContextConstraints `json:"securityContextConstraints,omitempty" description:"constraints that the security context for containers must follow"`
+}
+
+// ServiceAccountList is a list of ServiceAccount objects
+type ServiceAccountList struct {
+	TypeMeta `json:",inline"`
+	ListMeta `json:"metadata,omitempty"`
+
+	Items []ServiceAccount `json:"items"`
 }
 
 // Endpoints is a collection of endpoints that implement the actual service.  Example:
@@ -1350,8 +1380,8 @@ type PodExecOptions struct {
 	// Container in which to execute the command.
 	Container string
 
-	// Command is the remote command to execute
-	Command string
+	// Command is the remote command to execute; argv array; not executed within a shell.
+	Command []string
 }
 
 // PodProxyOptions is the query options to a Pod's proxy call
@@ -1590,6 +1620,11 @@ type ObjectReference struct {
 	FieldPath string `json:"fieldPath,omitempty"`
 }
 
+type SerializedReference struct {
+	TypeMeta  `json:",inline"`
+	Reference ObjectReference `json:"reference,omitempty" description:"the reference to an object in the system"`
+}
+
 type EventSource struct {
 	// Component from which the event is generated.
 	Component string `json:"component,omitempty"`
@@ -1794,7 +1829,28 @@ const MaxSecretSize = 1 * 1024 * 1024
 type SecretType string
 
 const (
-	SecretTypeOpaque SecretType = "Opaque" // Default; arbitrary user-defined data
+	// SecretTypeOpaque is the default; arbitrary user-defined data
+	SecretTypeOpaque SecretType = "Opaque"
+
+	// SecretTypeServiceAccountToken contains a token that identifies a service account to the API
+	//
+	// Required fields:
+	// - Secret.Annotations["serviceAccountName"] - the name of the ServiceAccount the token identifies
+	// - Secret.Annotations["serviceAccountUID"] - the UID of the ServiceAccount the token identifies
+	// - Secret.Data["token"] - a token that identifies the service account to the API
+	//
+	// Optional fields:
+	// - Secret.Data["kubernetes.kubeconfig"]
+	SecretTypeServiceAccountToken SecretType = "ServiceAccountToken"
+
+	// ServiceAccountNameKey is the key of the required annotation for SecretTypeServiceAccountToken secrets
+	ServiceAccountNameKey = "serviceAccountName"
+	// ServiceAccountUIDKey is the key of the required annotation for SecretTypeServiceAccountToken secrets
+	ServiceAccountUIDKey = "serviceAccountUID"
+	// ServiceAccountTokenKey is the key of the required data for SecretTypeServiceAccountToken secrets
+	ServiceAccountTokenKey = "token"
+	// ServiceAccountKubeconfigKey is the key of the optional kubeconfig data for SecretTypeServiceAccountToken secrets
+	ServiceAccountKubeconfigKey = "kubernetes.kubeconfig"
 )
 
 type SecretList struct {
@@ -1873,3 +1929,101 @@ type ComponentStatusList struct {
 
 	Items []ComponentStatus `json:"items"`
 }
+
+// SecurityContext holds security configuration that will be applied to a container.  SecurityContext
+// contains duplication of some existing fields from the Container resource.  These duplicate fields
+// will be populated based on the Container configuration if they are not set.  Defining them on
+// both the Container AND the SecurityContext will result in an error.
+type SecurityContext struct {
+	// Capabilities are the capabilities to add/drop when running the container
+	Capabilities *Capabilities `json:"capabilities,omitempty" description:"the linux capabilites that should be added or removed"`
+
+	// Run the container in privileged mode
+	Privileged *bool `json:"privileged,omitempty" description:"run the container in privileged mode"`
+
+	// SELinuxOptions are the labels to be applied to the container
+	// and volumes
+	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty" description:"options that control the SELinux labels applied"`
+
+	// RunAsUser is the UID to run the entrypoint of the container process.
+	RunAsUser *int64 `json:"runAsUser,omitempty" description:"the user id that runs the first process in the container"`
+}
+
+// SELinuxOptions are the labels to be applied to the container.
+type SELinuxOptions struct {
+	// SELinux user label
+	User string `json:"user,omitempty" description:"the user label to apply to the container"`
+
+	// SELinux role label
+	Role string `json:"role,omitempty" description:"the role label to apply to the container"`
+
+	// SELinux type label
+	Type string `json:"type,omitempty" description:"the type label to apply to the container"`
+
+	// SELinux level label.
+	Level string `json:"level,omitempty" description:"the level label to apply to the container"`
+}
+
+// SecurityContextConstraints governs the ability to make requests that affect the SecurityContext that will
+// be applied to a container.
+type SecurityContextConstraints struct {
+	// AllowPrivilegedContainer determines if a container can request to be run as privileged.
+	AllowPrivilegedContainer bool `json:"allowPrivilegedContainer,omitempty" description:"does the policy allow containers to run as privileged"`
+	// HostNetworkSources is a list of pod sources that are allowed to request to run in the host's
+	// network namespace.
+	HostNetworkSources []string `json:"hostNetworkSources,omitempty" description:"list of pod sources that are allowed to request to run in the host's network namespace"`
+	// AllowedCapabilities is a list of capabilities that can be requested to add to the container.
+	AllowedCapabilities []CapabilityType `json:"allowedCapabilities,omitempty" description:"the set of capabilities that can be requested to add to the container"`
+	// SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
+	SELinuxContext SELinuxContextStrategy `json:"SELinuxContext,omitempty" description:"the strategy that will apply labels to the container"`
+	// AllowHostDirVolumePlugin determines if the policy allow containers to use the HostDir volume plugin
+	AllowHostDirVolumePlugin bool `json:"allowHostDirVolumePlugin,omitempty" description:"does the policy allow containers to use the HostDir volume plugin"`
+	// RunAsUser  is the strategy that will dictate what RunAsUser is used in the SecurityContext.
+	RunAsUser RunAsUserStrategy `json:"runAsUser,omitempty" description:"the strategy that will determine the UID to run pid 0 in the container"`
+}
+
+// SELinuxContextStrategy provides configuration options for all SELinuxContextStrategy that can be used
+// in a SecurityContextConstraints.
+type SELinuxContextStrategy struct {
+	// StrategyType is the SELinuxContextStrategyType being configured.
+	StrategyType SELinuxContextStrategyType `json:"type,omitempty" description:"the type of strategy"`
+
+	// SELinuxOptions are the specific SELinux labels to apply.  Required for SELinuxStrategyMustRunAs.
+	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty" description:"specific SELinux labels to apply"`
+}
+
+// RunAsUserStrategy provides configuration options for all RunAsUserStrategy that can be used
+// in a SecurityContextConstraints.
+type RunAsUserStrategy struct {
+	// StrategyType is the RunAsUserStrategyType being configured.
+	StrategyType RunAsUserStrategyType `json:"type,omitempty" description:"the type of strategy"`
+
+	// UID is a specific uid that will run pid 0 in the container.  Required for type RunAsUserStrategyMustRunAs.
+	UID *int64 `json:"uid,omitempty" description:"the user id that runs the first process in the container"`
+}
+
+// SELinuxContextStrategyType defines different strategies that can be used when determining
+// the SELinux labels to be applied to the container.
+type SELinuxContextStrategyType string
+
+// RunAsUserStrategyType defines different strategies that can be used when determining
+// the uid that pid 1 will run as in the container.
+type RunAsUserStrategyType string
+
+const (
+	// container must have SELinux labels of X applied.
+	SELinuxStrategyMustRunAs SELinuxContextStrategyType = "MustRunAs"
+	// container may make requests for any SELinux context labels.
+	SELinuxStrategyRunAsAny SELinuxContextStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	SELinuxStrategyRunAsDefault SELinuxContextStrategyType = "RunAsDefault"
+
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAs RunAsUserStrategyType = "MustRunAs"
+	// container must run as a non-root uid
+	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategyType = "MustRunAsNonRoot"
+	// container may make requests for any uid.
+	RunAsUserStrategyRunAsAny RunAsUserStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	RunAsUserStrategyRunAsDefault RunAsUserStrategyType = "RunAsDefault"
+)

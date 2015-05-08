@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -186,11 +186,11 @@ func TestPluginLegacy(t *testing.T) {
 	}
 
 	spec := &api.Volume{VolumeSource: api.VolumeSource{GCEPersistentDisk: &api.GCEPersistentDiskVolumeSource{}}}
-	if _, err := plug.NewBuilder(volume.NewSpecFromVolume(spec), &api.ObjectReference{UID: types.UID("poduid")}, volume.VolumeOptions{""}); err == nil {
+	if _, err := plug.NewBuilder(volume.NewSpecFromVolume(spec), &api.ObjectReference{UID: types.UID("poduid")}, volume.VolumeOptions{""}, nil); err == nil {
 		t.Errorf("Expected failiure")
 	}
 
-	cleaner, err := plug.NewCleaner("vol1", types.UID("poduid"))
+	cleaner, err := plug.NewCleaner("vol1", types.UID("poduid"), nil)
 	if err != nil {
 		t.Errorf("Failed to make a new Cleaner: %v", err)
 	}

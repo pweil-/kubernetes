@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import (
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/dockertools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/network"
-	kubeletProber "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/prober"
 	docker "github.com/fsouza/go-dockerclient"
 	cadvisorApi "github.com/google/cadvisor/info/v1"
 )
@@ -90,7 +89,6 @@ func TestRunOnce(t *testing.T) {
 		os:                  kubecontainer.FakeOS{},
 		volumeManager:       newVolumeManager(),
 	}
-	kb.runtimeHooks = newKubeletRuntimeHooks(kb.recorder)
 
 	kb.networkPlugin, _ = network.InitNetworkPlugin([]network.NetworkPlugin{}, "", network.NewFakeHost(nil))
 	if err := kb.setupDataDirs(); err != nil {
@@ -150,7 +148,7 @@ func TestRunOnce(t *testing.T) {
 		t: t,
 	}
 
-	kb.containerManager = dockertools.NewDockerManager(
+	kb.containerRuntime = dockertools.NewFakeDockerManager(
 		kb.dockerClient,
 		kb.recorder,
 		kb.readinessManager,
@@ -161,8 +159,9 @@ func TestRunOnce(t *testing.T) {
 		"",
 		kubecontainer.FakeOS{},
 		kb.networkPlugin,
-		&kubeletProber.FakeProber{})
-	kb.containerManager.Puller = &dockertools.FakeDockerPuller{}
+		kb,
+		nil,
+		newKubeletRuntimeHooks(kb.recorder))
 
 	pods := []*api.Pod{
 		{

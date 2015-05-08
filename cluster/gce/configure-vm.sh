@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2015 Google Inc. All rights reserved.
+# Copyright 2015 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,6 +104,11 @@ download-or-bust() {
 # Install salt from GCS.  See README.md for instructions on how to update these
 # debs.
 install-salt() {
+  if dpkg -s salt-minion &>/dev/null; then
+    echo "== SaltStack already installed, skipping install step =="
+    return
+  fi
+
   echo "== Refreshing package database =="
   until apt-get update; do
     echo "== apt-get update failed, retrying =="
@@ -158,16 +163,22 @@ EOF
   echo "== Finished installing Salt =="
 }
 
-# Ensure salt-minion never runs
+# Ensure salt-minion isn't running and never runs
 stop-salt-minion() {
+  if [[ -e /etc/init/salt-minion.override ]]; then
+    # Assume this has already run (upgrade, or baked into containervm)
+    return
+  fi
+
   # This ensures it on next reboot
   echo manual > /etc/init/salt-minion.override
   update-rc.d salt-minion disable
 
-  if service salt-minion status >/dev/null; then
-    echo "salt-minion started in defiance of runlevel policy, aborting startup." >&2
-    return 1
-  fi
+  while service salt-minion status >/dev/null; do
+    echo "salt-minion found running, stopping"
+    service salt-minion stop
+    sleep 1
+  done
 }
 
 # Mounts a persistent disk (formatting if needed) to store the persistent data
@@ -188,8 +199,10 @@ mount-master-pd() {
 
   # Format and mount the disk, create directories on it for all of the master's
   # persistent data, and link them to where they're used.
+  echo "Mounting master-pd"
   mkdir -p /mnt/master-pd
-  /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" "${device_path}" /mnt/master-pd
+  /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" "${device_path}" /mnt/master-pd &>/var/log/master-pd-mount.log || \
+    { echo "!!! master-pd mount failed, review /var/log/master-pd-mount.log !!!"; return 1; }
   # Contains all the data stored in etcd
   mkdir -m 700 -p /mnt/master-pd/var/etcd
   # Contains the dynamically generated apiserver auth certs and keys
@@ -223,6 +236,8 @@ function create-salt-pillar() {
   cat <<EOF >/srv/salt-overlay/pillar/cluster-params.sls
 instance_prefix: '$(echo "$INSTANCE_PREFIX" | sed -e "s/'/''/g")'
 node_instance_prefix: '$(echo "$NODE_INSTANCE_PREFIX" | sed -e "s/'/''/g")'
+cluster_class_b: '$(echo "$KUBE_GCE_CLUSTER_CLASS_B" | sed -e "s/'/''/g")'
+allocate_node_cidrs: '$(echo "$ALLOCATE_NODE_CIDRS" | sed -e "s/'/''/g")'
 portal_net: '$(echo "$PORTAL_NET" | sed -e "s/'/''/g")'
 enable_cluster_monitoring: '$(echo "$ENABLE_CLUSTER_MONITORING" | sed -e "s/'/''/g")'
 enable_node_monitoring: '$(echo "$ENABLE_NODE_MONITORING" | sed -e "s/'/''/g")'

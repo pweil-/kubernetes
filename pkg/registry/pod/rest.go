@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -261,7 +261,9 @@ func ExecLocation(getter ResourceGetter, connInfo client.ConnectionInfoGetter, c
 	if opts.TTY {
 		params.Add(api.ExecTTYParam, "1")
 	}
-	params.Add("command", opts.Command)
+	for _, c := range opts.Command {
+		params.Add("command", c)
+	}
 	loc := &url.URL{
 		Scheme:   nodeScheme,
 		Host:     fmt.Sprintf("%s:%d", nodeHost, nodePort),

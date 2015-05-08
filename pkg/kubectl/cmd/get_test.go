@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -163,7 +163,7 @@ func TestGetUnknownSchemaObjectListGeneric(t *testing.T) {
 			output: "unlikelyversion",
 			list:   "v1beta3",
 			obj1:   "unlikelyversion", // doesn't have v1beta3
-			obj2:   "v1beta1",         // version of the API response
+			obj2:   "v1beta3",         // version of the API response
 		},
 		"handles common version": {
 			output: "v1beta1",
@@ -393,6 +393,17 @@ func TestGetMultipleTypeObjectsAsList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	list, err := runtime.ExtractList(out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if errs := runtime.DecodeList(list, api.Scheme); len(errs) > 0 {
+		t.Fatalf("unexpected error: %v", errs)
+	}
+	if err := runtime.SetList(out, list); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	expected := &api.List{
 		Items: []runtime.Object{
 			&pods.Items[0],

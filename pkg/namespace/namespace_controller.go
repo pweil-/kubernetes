@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -107,6 +107,10 @@ func finalize(kubeClient client.Interface, namespace api.Namespace) (*api.Namesp
 
 // deleteAllContent will delete all content known to the system in a namespace
 func deleteAllContent(kubeClient client.Interface, namespace string) (err error) {
+	err = deleteServiceAccounts(kubeClient, namespace)
+	if err != nil {
+		return err
+	}
 	err = deleteServices(kubeClient, namespace)
 	if err != nil {
 		return err
@@ -210,6 +214,20 @@ func deleteResourceQuotas(kubeClient client.Interface, ns string) error {
 	}
 	for i := range resourceQuotas.Items {
 		err := kubeClient.ResourceQuotas(ns).Delete(resourceQuotas.Items[i].Name)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deleteServiceAccounts(kubeClient client.Interface, ns string) error {
+	items, err := kubeClient.ServiceAccounts(ns).List(labels.Everything(), fields.Everything())
+	if err != nil {
+		return err
+	}
+	for i := range items.Items {
+		err := kubeClient.ServiceAccounts(ns).Delete(items.Items[i].Name)
 		if err != nil {
 			return err
 		}

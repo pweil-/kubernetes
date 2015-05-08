@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2014 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ trap 'rm -rf "${MINIONS_FILE}"' EXIT
 attempt=0
 while true; do
   "${KUBE_ROOT}/cluster/kubectl.sh" get nodes -o template -t $'{{range.items}}{{.metadata.name}}\n{{end}}' --api-version=v1beta3 > "${MINIONS_FILE}"
-  found=$(grep -c . "${MINIONS_FILE}")
+  found=$(grep -c . "${MINIONS_FILE}") || true
   if [[ ${found} == "${NUM_MINIONS}" ]]; then
     break
   else

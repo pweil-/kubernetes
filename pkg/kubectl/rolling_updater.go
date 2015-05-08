@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -84,6 +84,24 @@ const (
 	desiredReplicasAnnotation = kubectlAnnotationPrefix + "desired-replicas"
 	nextControllerAnnotation  = kubectlAnnotationPrefix + "next-controller-id"
 )
+
+func AbortRollingUpdate(c *RollingUpdaterConfig) {
+	// Swap the controllers
+	tmp := c.OldRc
+	c.OldRc = c.NewRc
+	c.NewRc = tmp
+
+	if c.NewRc.Annotations == nil {
+		c.NewRc.Annotations = map[string]string{}
+	}
+	c.NewRc.Annotations[sourceIdAnnotation] = fmt.Sprintf("%s:%s", c.OldRc.Name, c.OldRc.UID)
+	desiredSize, found := c.OldRc.Annotations[desiredReplicasAnnotation]
+	if found {
+		fmt.Printf("Found desired replicas.")
+		c.NewRc.Annotations[desiredReplicasAnnotation] = desiredSize
+	}
+	c.CleanupPolicy = DeleteRollingUpdateCleanupPolicy
+}
 
 func GetNextControllerAnnotation(rc *api.ReplicationController) (string, bool) {
 	res, found := rc.Annotations[nextControllerAnnotation]
@@ -237,7 +255,7 @@ func (r *RollingUpdater) getExistingNewRc(sourceId, name string) (rc *api.Replic
 		source := annotations[sourceIdAnnotation]
 		_, ok := annotations[desiredReplicasAnnotation]
 		if source != sourceId || !ok {
-			err = fmt.Errorf("Missing/unexpected annotations for controller %s: %s", name, annotations)
+			err = fmt.Errorf("Missing/unexpected annotations for controller %s, expected %s : %s", name, sourceId, annotations)
 		}
 		return
 	}

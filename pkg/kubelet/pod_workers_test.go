@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/dockertools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/network"
-	kubeletProber "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/prober"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 )
 
@@ -43,7 +42,7 @@ func createPodWorkers() (*podWorkers, map[types.UID][]string) {
 	fakeDocker := &dockertools.FakeDockerClient{}
 	fakeRecorder := &record.FakeRecorder{}
 	np, _ := network.InitNetworkPlugin([]network.NetworkPlugin{}, "", network.NewFakeHost(nil))
-	dockerManager := dockertools.NewDockerManager(fakeDocker, fakeRecorder, nil, nil, dockertools.PodInfraContainerImage, 0, 0, "", kubecontainer.FakeOS{}, np, &kubeletProber.FakeProber{})
+	dockerManager := dockertools.NewFakeDockerManager(fakeDocker, fakeRecorder, nil, nil, dockertools.PodInfraContainerImage, 0, 0, "", kubecontainer.FakeOS{}, np, nil, nil, newKubeletRuntimeHooks(fakeRecorder))
 	fakeRuntimeCache := kubecontainer.NewFakeRuntimeCache(dockerManager)
 
 	lock := sync.Mutex{}
