@@ -14,18 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package conversion_test
 
 import (
+	"io/ioutil"
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/conversion"
 
 	"github.com/google/gofuzz"
 )
 
 func TestDeepCopy(t *testing.T) {
-	semantic := EqualitiesOrDie()
+	semantic := conversion.EqualitiesOrDie()
 	f := fuzz.New().NilChance(.5).NumElements(0, 100)
 	table := []interface{}{
 		map[string]string{},
@@ -40,7 +44,7 @@ func TestDeepCopy(t *testing.T) {
 		}{},
 	}
 	for _, obj := range table {
-		obj2, err := DeepCopy(obj)
+		obj2, err := conversion.DeepCopy(obj)
 		if err != nil {
 			t.Errorf("Error: couldn't copy %#v", obj)
 			continue
@@ -51,7 +55,7 @@ func TestDeepCopy(t *testing.T) {
 
 		obj3 := reflect.New(reflect.TypeOf(obj)).Interface()
 		f.Fuzz(obj3)
-		obj4, err := DeepCopy(obj3)
+		obj4, err := conversion.DeepCopy(obj3)
 		if err != nil {
 			t.Errorf("Error: couldn't copy %#v", obj)
 			continue
@@ -64,7 +68,7 @@ func TestDeepCopy(t *testing.T) {
 }
 
 func copyOrDie(t *testing.T, in interface{}) interface{} {
-	out, err := DeepCopy(in)
+	out, err := conversion.DeepCopy(in)
 	if err != nil {
 		t.Fatalf("DeepCopy failed: %#q: %v", in, err)
 	}
@@ -136,8 +140,77 @@ func BenchmarkDeepCopy(b *testing.B) {
 	var r interface{}
 	for i := 0; i < b.N; i++ {
 		for j := range table {
-			r, _ = DeepCopy(table[j])
+			r, _ = conversion.DeepCopy(table[j])
 		}
 	}
 	result = r
+}
+
+func BenchmarkPodCopy(b *testing.B) {
+	data, err := ioutil.ReadFile("pod_example.json")
+	if err != nil {
+		b.Fatalf("unexpected error while reading file: %v", err)
+	}
+	var pod api.Pod
+	if err := api.Scheme.DecodeInto(data, &pod); err != nil {
+		b.Fatalf("unexpected error decoding pod: %v", err)
+	}
+
+	var result *api.Pod
+	for i := 0; i < b.N; i++ {
+		obj, err := conversion.DeepCopy(&pod)
+		if err != nil {
+			b.Fatalf("unexpected error copying pod: %v", err)
+		}
+		result = obj.(*api.Pod)
+	}
+	if !api.Semantic.DeepEqual(pod, *result) {
+		b.Fatalf("incorrect copy: expected %v, got %v", pod, *result)
+	}
+}
+
+func BenchmarkNodeCopy(b *testing.B) {
+	data, err := ioutil.ReadFile("node_example.json")
+	if err != nil {
+		b.Fatalf("unexpected error while reading file: %v", err)
+	}
+	var node api.Node
+	if err := api.Scheme.DecodeInto(data, &node); err != nil {
+		b.Fatalf("unexpected error decoding node: %v", err)
+	}
+
+	var result *api.Node
+	for i := 0; i < b.N; i++ {
+		obj, err := conversion.DeepCopy(&node)
+		if err != nil {
+			b.Fatalf("unexpected error copying node: %v", err)
+		}
+		result = obj.(*api.Node)
+	}
+	if !api.Semantic.DeepEqual(node, *result) {
+		b.Fatalf("incorrect copy: expected %v, got %v", node, *result)
+	}
+}
+
+func BenchmarkReplicationControllerCopy(b *testing.B) {
+	data, err := ioutil.ReadFile("replication_controller_example.json")
+	if err != nil {
+		b.Fatalf("unexpected error while reading file: %v", err)
+	}
+	var replicationController api.ReplicationController
+	if err := api.Scheme.DecodeInto(data, &replicationController); err != nil {
+		b.Fatalf("unexpected error decoding node: %v", err)
+	}
+
+	var result *api.ReplicationController
+	for i := 0; i < b.N; i++ {
+		obj, err := conversion.DeepCopy(&replicationController)
+		if err != nil {
+			b.Fatalf("unexpected error copying replication controller: %v", err)
+		}
+		result = obj.(*api.ReplicationController)
+	}
+	if !api.Semantic.DeepEqual(replicationController, *result) {
+		b.Fatalf("incorrect copy: expected %v, got %v", replicationController, *result)
+	}
 }
