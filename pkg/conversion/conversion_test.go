@@ -51,7 +51,7 @@ func BenchmarkPodConversion(b *testing.B) {
 		result = obj.(*api.Pod)
 	}
 	if !api.Semantic.DeepDerivative(pod, *result) {
-		b.Fatalf("Incorrect conversion: expected %v, got %v", pod, result)
+		b.Fatalf("Incorrect conversion: expected %v, got %v", pod, *result)
 	}
 }
 
@@ -79,7 +79,7 @@ func BenchmarkNodeConversion(b *testing.B) {
 		result = obj.(*api.Node)
 	}
 	if !api.Semantic.DeepDerivative(node, *result) {
-		b.Fatalf("Incorrect conversion: expected %v, got %v", node, result)
+		b.Fatalf("Incorrect conversion: expected %v, got %v", node, *result)
 	}
 }
 
@@ -107,6 +107,6 @@ func BenchmarkReplicationControllerConversion(b *testing.B) {
 		result = obj.(*api.ReplicationController)
 	}
 	if !api.Semantic.DeepDerivative(replicationController, *result) {
-		b.Fatalf("Incorrect conversion: expected %v, got %v", replicationController, result)
+		b.Fatalf("Incorrect conversion: expected %v, got %v", replicationController, *result)
 	}
 }
