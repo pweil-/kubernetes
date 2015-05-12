@@ -28,17 +28,44 @@ var pool = sync.Pool{
 	New: func() interface{} { return newGobCopier() },
 }
 
+// nonGobCopier is used for restricted types
+var nonGobCopier = NewConverter()
+
 // DeepCopy makes a deep copy of source or returns an error.
 func DeepCopy(source interface{}) (interface{}, error) {
-	v := reflect.New(reflect.TypeOf(source))
+	name := reflect.TypeOf(source).Name()
+	return deepCopyInternal(source, isRestrictedType(name))
+}
 
-	c := pool.Get().(gobCopier)
-	defer pool.Put(c)
-	if err := c.CopyInto(v.Interface(), source); err != nil {
-		return nil, err
+func deepCopyInternal(source interface{}, restrictedType bool) (interface{}, error) {
+	if restrictedType {
+		src := reflect.ValueOf(source)
+		v := reflect.New(src.Type()).Elem()
+		s := &scope{
+			converter: nonGobCopier,
+		}
+		if err := nonGobCopier.convert(src, v, s); err != nil {
+			return nil, err
+		}
+		return v.Interface(), nil
+	}else{
+		v := reflect.New(reflect.TypeOf(source))
+		c := pool.Get().(gobCopier)
+		defer pool.Put(c)
+		if err := c.CopyInto(v.Interface(), source); err != nil {
+			return nil, err
+		}
+		return v.Elem().Interface(), nil
 	}
+}
 
-	return v.Elem().Interface(), nil
+// isRestrictedType identifies types that contain pointers to simple types
+func isRestrictedType(typeName string) bool {
+	switch typeName{
+	case "Pod", "RestrictedTestType":
+		return true
+	}
+	return false
 }
 
 // gobCopier provides a copy mechanism for objects using Gob.
@@ -65,4 +92,11 @@ func (c *gobCopier) CopyInto(dst, src interface{}) error {
 		return err
 	}
 	return nil
+}
+
+// RestrictedTestType is exposed to allow testing a restricted type
+type RestrictedTestType struct {
+	I *int
+	B *bool
+	S *string
 }
