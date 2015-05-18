@@ -3611,6 +3611,88 @@ func convert_v1beta3_SecurityContext_To_api_SecurityContext(in *SecurityContext,
 	return nil
 }
 
+func convert_v1beta3_SecurityContextConstraints_To_api_SecurityContextConstraints(in *SecurityContextConstraints, out *newer.SecurityContextConstraints, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*SecurityContextConstraints))(in)
+	}
+	if err := convert_v1beta3_TypeMeta_To_api_TypeMeta(&in.TypeMeta, &out.TypeMeta, s); err != nil {
+		return err
+	}
+	if err := convert_v1beta3_ObjectMeta_To_api_ObjectMeta(&in.ObjectMeta, &out.ObjectMeta, s); err != nil {
+		return err
+	}
+	out.AllowPrivilegedContainer = in.AllowPrivilegedContainer
+	if in.AllowedCapabilities != nil {
+		out.AllowedCapabilities = make([]newer.CapabilityType, len(in.AllowedCapabilities))
+		for i := range in.AllowedCapabilities {
+			out.AllowedCapabilities[i] = newer.CapabilityType(in.AllowedCapabilities[i])
+		}
+	} else {
+		out.AllowedCapabilities = nil
+	}
+	out.AllowHostDirVolumePlugin = in.AllowHostDirVolumePlugin
+	out.SELinuxContext = newer.SELinuxContextStrategyType(in.SELinuxContext)
+	out.RunAsUser = newer.RunAsUserStrategyType(in.RunAsUser)
+	if in.Users != nil {
+		out.Users = make([]string, len(in.Users))
+		for i := range in.Users {
+			out.Users[i] = in.Users[i]
+		}
+	} else {
+		out.Users = nil
+	}
+	if in.Groups != nil {
+		out.Groups = make([]string, len(in.Groups))
+		for i := range in.Groups {
+			out.Groups[i] = in.Groups[i]
+		}
+	} else {
+		out.Groups = nil
+	}
+	return nil
+}
+
+func convert_api_SecurityContextConstraints_To_v1beta3_SecurityContextConstraints(in *newer.SecurityContextConstraints, out *SecurityContextConstraints, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*newer.SecurityContextConstraints))(in)
+	}
+	if err := convert_api_TypeMeta_To_v1beta3_TypeMeta(&in.TypeMeta, &out.TypeMeta, s); err != nil {
+		return err
+	}
+	if err := convert_api_ObjectMeta_To_v1beta3_ObjectMeta(&in.ObjectMeta, &out.ObjectMeta, s); err != nil {
+		return err
+	}
+	out.AllowPrivilegedContainer = in.AllowPrivilegedContainer
+	if in.AllowedCapabilities != nil {
+		out.AllowedCapabilities = make([]CapabilityType, len(in.AllowedCapabilities))
+		for i := range in.AllowedCapabilities {
+			out.AllowedCapabilities[i] = CapabilityType(in.AllowedCapabilities[i])
+		}
+	} else {
+		out.AllowedCapabilities = nil
+	}
+	out.AllowHostDirVolumePlugin = in.AllowHostDirVolumePlugin
+	out.SELinuxContext = SELinuxContextStrategyType(in.SELinuxContext)
+	out.RunAsUser = RunAsUserStrategyType(in.RunAsUser)
+	if in.Users != nil {
+		out.Users = make([]string, len(in.Users))
+		for i := range in.Users {
+			out.Users[i] = in.Users[i]
+		}
+	} else {
+		out.Users = nil
+	}
+	if in.Groups != nil {
+		out.Groups = make([]string, len(in.Groups))
+		for i := range in.Groups {
+			out.Groups[i] = in.Groups[i]
+		}
+	} else {
+		out.Groups = nil
+	}
+	return nil
+}
+
 func convert_v1beta3_SerializedReference_To_api_SerializedReference(in *SerializedReference, out *newer.SerializedReference, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*SerializedReference))(in)
@@ -4385,6 +4467,7 @@ func init() {
 		convert_api_SecretList_To_v1beta3_SecretList,
 		convert_api_SecretVolumeSource_To_v1beta3_SecretVolumeSource,
 		convert_api_Secret_To_v1beta3_Secret,
+		convert_api_SecurityContextConstraints_To_v1beta3_SecurityContextConstraints,
 		convert_api_SecurityContext_To_v1beta3_SecurityContext,
 		convert_api_SerializedReference_To_v1beta3_SerializedReference,
 		convert_api_ServiceAccountList_To_v1beta3_ServiceAccountList,
@@ -4494,6 +4577,7 @@ func init() {
 		convert_v1beta3_SecretList_To_api_SecretList,
 		convert_v1beta3_SecretVolumeSource_To_api_SecretVolumeSource,
 		convert_v1beta3_Secret_To_api_Secret,
+		convert_v1beta3_SecurityContextConstraints_To_api_SecurityContextConstraints,
 		convert_v1beta3_SecurityContext_To_api_SecurityContext,
 		convert_v1beta3_SerializedReference_To_api_SerializedReference,
 		convert_v1beta3_ServiceAccountList_To_api_ServiceAccountList,
