@@ -9,6 +9,7 @@ cluster, namespaces, and users within the cluster to govern how a [security cont
 Administration of a multi-tenant cluster requires the ability to provide varying sets of permissions
 among the tenants, the infrastructure components, and end users of the system who may themselves be
 administrators within their own isolated namespace.
+
 Actors in a cluster may include infrastructure that is managed by administrators, infrastructure
 that is exposed to end users (builds, deployments), the isolated end user namespaces in the cluster, and
 the individual users inside those namespaces.  Infrastructure components that operate on behalf of a
@@ -17,7 +18,7 @@ granting the user themselves an elevated set of permissions.
 
 ### Goals
 
-1.  Associate [service accounts](http://docs.k8s.io/design/service_accounts.md) and identities with
+1.  Associate [service accounts](http://docs.k8s.io/design/service_accounts.md) and users with
 a set of constraints that dictate how a [security context](./security_contexts.md) is established for a pod.
 1.  Provide the ability for users and infrastructure components to run pods with elevated privileges
 on behalf of another user or within a namespace where privileges are more restrictive.
@@ -31,7 +32,7 @@ As an administrator, I can create a namespace for a person that can't create pri
 AND enforces that the UID of the containers is set to a certain value
 
 Use cases 2:
-A build controller should be able to create a privileged pod in a namespace, but regular users
+As a cluster operator, a build controller should be able to create a privileged pod in a namespace, but regular users
 can't create privileged pods AND regular users can't exec into that pod.
 
 Use cases 3:
@@ -45,17 +46,13 @@ pods and service accounts within a project
 
 ### Requirements
 
-1.  Provide a set of restrictions that a security context operates under a new object will be
-introduced called SecurityContextConstraints.
-1.  SecurityContextConstraints may also exist outside of a namespace.
-1.  A cluster default service account will be created for the default namespace and be available to
-admission controllers via configuration.
-1.  User information must be available to admission controllers.
+1.  Provide a set of restrictions that a security context operates as new, cluster-scoped, object
+called SecurityContextConstraints.
+1.  User information in `user.Info` must be available to admission controllers.
 1.  Some authorizers may restrict a user’s ability to reference a service account.  Systems requiring
 the ability to secure service accounts on a user level will be able to add a policy that enables
 referencing specific service accounts themselves.
-1.  Admission control must validate the creation of Pods, PodTemplates, and Replication controllers
-against the allowed set of constraints.
+1.  Admission control must validate the creation of Pods against the allowed set of constraints.
 
 ### Design
 
@@ -72,59 +69,50 @@ The cluster administrator may decide that no pod can run as the root user in the
 provide a block of UIDs that the allocator can use to distribute amongst namespaces.
 
 A security context constraint object exists in the root scope, outside of a namespace.  The
-security context constraints can reference users, groups, or a service account that is allowed
-to operate under the constraints.
+security context constraints will reference users and groups that are allowed
+to operate under the constraints.  In order to support this, `ServiceAccounts` must be mapped
+to a user name or group list by the authentication/authorization layers.  This allows the security
+context to treat users, groups, and service accounts uniformly.
 
-A one to one relationship will be maintained for a security context constraint and a service account.
-Users may be allowed to have many security context constraints and admission will create a unioned
-set of their highest allowed permissions when creating a pod (discussed in admission, below).
+Below is a list of security context constraints which will likely serve most use cases:
 
-To minimize the amount of objects that must be managed by a cluster administrator the following
-security context constraints objects can be provided as a default set:
-
-1.  User/Group Constraints - this is the default security context constraints for the cluster and is usually the
-most restrictive set of constraints.
-1.  Service Account Constraints - security context constraints for service accounts will be created that allows
-pods to run with different permissions than the user.  The user should be required to have
-permissions to reference the service account in order to run a pod with the service account's
-security context constraints.
-1.  Administrator Constraints - a set of constraints with elevated privileges that can be used
+1.  A default constraints object.  This object may include a `system:authenticated` group and will
+likely be the most restrictive set of constraints.
+1.  A default constraints object for service accounts.  This object can be identified as serving
+a group identified by `system:service-accounts` which can be imposed by the service account authenticator / token generator.
+1.  Cluster admin constraints identified by `system:cluster-admins` group - a set of constraints with elevated privileges that can be used
 by an administrative user or group.
-1.  Infrastructure Component Constraints - constraints that may have elevated privileges within the
-cluster but possibly not as elevated as administrator constraints.
+1.  Infrastructure components constraints which can be identified either by a specific service
+account or by a group containing all service accounts.
 
 ```go
 // SecurityContextConstraints governs the ability to make requests that affect the SecurityContext that will
 // be applied to a container.
 type SecurityContextConstraints struct {
-  // Type distinguishes the type of SecurityContextConstraints object.  Acceptable values are
-  // INFRA, USER, DEFAULT_USER, SERVICE_ACCOUNT, DEFAULT_SERVICE_ACCOUNT
-  Type string
   // AllowPrivilegedContainer determines if a container can request to be run as privileged.
   AllowPrivilegedContainer bool
   // AllowedCapabilities is a list of capabilities that can be requested to add to the container.
   AllowedCapabilities []CapabilityType
   // AllowHostDirVolumePlugin determines if the policy allow containers to use the HostDir volume plugin
   AllowHostDirVolumePlugin bool
+  // SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
+  SELinuxContext SELinuxContextStrategyType
+  // RunAsUser is the strategy that will dictate what RunAsUser is used in the SecurityContext.
+  RunAsUser RunAsUserStrategyType
+
   // The users who have permissions to use this security context constraints
-  AllowedUsers []string
-  // The service accounts that have permission to use this security context constraints
-  AllowedServiceAccounts []NamespacedName
+  Users []string
+  // The groups that have permission to use this security context constraints
+  Groups []string
 }
 
+// SecurityContextConstraintsAllocator provides the implementation to generate a new security
+// context based on constraints or validate an existing security context against constraints.
 type SecurityContextConstraintsAllocator interface {
   // Create a SecurityContext based on the given constraints
   CreateSecurityConstraints(constraints *api.SecurityContextConstraints) api.SecurityContext
   // Ensure a container's SecurityContext is in compliance with the given constraints
   ValidateSecurityConstraints(container *api.Container, constraints *api.SecurityContextConstraints) fielderrors.ValidationErrorList
-}
-
-// implements the SecurityContextConstraintsAllocator interface
-type SimpleSecurityContextConstraintsAllocator struct {
-    // SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
-    SELinuxContext SELinuxContextStrategy
-    // RunAsUser is the strategy that will dictate what RunAsUser is used in the SecurityContext.
-    RunAsUser RunAsUserStrategy
 }
 
 const (
@@ -150,36 +138,31 @@ const (
 
 As reusable objects in the root scope, security context constraints follow the lifecycle of the
 cluster itself.  Maintenance of constraints such as adding, assigning, or changing them is the
-responsibility of the cluster administrator but is assisted by automation within the cluster.  For
+responsibility of the cluster administrator.  For
 instance, creating a new user within a namespace should not require the cluster administrator to
 define the user's security context constraints.  They should receive the default set of constraints
 that the administrator has defined for users.
 
-When a service account or user is removed finalizers should ensure that the references from the security context
-restraints are also removed in order to avoid the risk of having the same user or service account
-receive permissions inadvertently.  This can also be avoided by using a unique identifier like
-the object UID in the security context constraints list of allowed users but clean up should
-still occur to avoid unnecessary object growth.
+Finalizers should ensure that any user or group references in a security context constraint object
+will be removed when the referenced object is removed.
+
 
 #### Default Security Context Constraints And Overrides
 
 In order to establish security context constraints for service accounts and users there must be a way
-to identify the default set of constraints that is to be used.  In order to identify the constraints
-a type field or default flag may be used on the security context constraints object.
-
-To avoid unnecessarily large objects with references to many users in the system the constraints
-identified as the default for the object type can be considered referenceable by all objects
-of that type.  For example, rather than listing every user in the cluster in the default user
-security context constraint object the mechanism that retrieves the available security context
-constraints for the user may fetch all constraints with specific references to the user and
-the default constraints.
+to identify the default set of constraints that is to be used.  This is best accomplished by using
+groups.  As mentioned above, groups may be used by the authentication/authorization layer to ensure
+that every user maps to at least one group (with a default example of `system:authenticated`) and it
+is up to the cluster administrator to ensure that a security context constraint object exists that
+references the group.
 
 If an administrator would like to provide a user with a changed set of security context permissions
 they may do the following:
 
-1.  Create a new security context constraints object and add a reference to the user.
-1.  Create a new security context constraints object and add a reference to a serivce account
-that the user has access to reference.
+1.  Create a new security context constraints object and add a reference to the user or a group
+that the user belongs to.
+1.  Add the user (or group) to an existing security context constraints object with the proper
+elevated privileges.
 
 #### Admission
 
@@ -188,32 +171,42 @@ based on capabilities granted to a user.  In terms of the security context const
 that an admission controller may inspect the user info made available in the context to retrieve
 and appropriate set of security context constraints for validation.
 
-The appropriate set of security context constraints is defined as the set of security context
-constraints that the user has references to the user, the default set of constraints for the
-user type, and any security context constraints that they are allowed to reference via a service
-account.
+The appropriate set of security context constraints is defined as all of the security context
+constraints available that have reference to the user or groups that the user belongs to.
 
 Admission will use the SecurityContextConstraintsAllocator to ensure that any requests for a
 specific security context constraint setting or to generate settings using the following approach:
 
 **Pod with referenced service account**
 
-1.  Ensure that the user has permissions to reference the service account.
-2.  Retrieve the service account's security context constraints.
-3.  Ask the SecurityContextConstraintsAllocator to create the security context.  The allocator
+1.  First, ensure that the user has the ability to use the security context constraints of the
+service account.  This can be accomplished by finding the intersection of allowed constraints between
+the user and the service account.  If none exists then the user does not have permissions to
+run as the service account.
+2.  Ask the SecurityContextConstraintsAllocator to create the security context.  The allocator
 will not overwrite fields already set in the container.
-4.  Validate that the generated SecurityContext falls within the boundaries of the security context
+3.  Validate that the generated SecurityContext falls within the boundaries of the security context
 constraints and accept or reject the pod.
 
-**Pods with no service account**
+**Pods with no service account and pods who's service account does not match the requested privileges**
 
-1.  Create a union of the user level permissions in the constraints.  This is the highest level
-under which they can create a pod if they are not referencing a service account.
-2.  Ask the SecurityContextConstraintsAllocator to create the security context
-3.  Ask the SecurityContextConstraintsAllocator to create the security context.  The allocator
+1.  Retrieve all security context constraints available for use by the user.
+2.  Loop through the constraints to ensure that any requests on the pod fall within an allowed
+security context constraint.  This constraint is what will be used in subsequent steps.  If no
+acceptable constraint is found then reject the pod.
+2.  Ask the SecurityContextConstraintsAllocator to create the security context.  The allocator
 will not overwrite fields already set in the container.
-4.  Validate that the generated SecurityContext falls within the boundaries of the security context
+3.  Validate that the generated SecurityContext falls within the boundaries of the security context
 constraints and accept or reject the pod.
+
+Note on validation:  Since a user may have more than one security context constraint that they
+are allowed to use validation should take place in two steps.
+
+1.  Soft Validation: Ensure that any requests on the pod fall within the constraint.  If a field like RunAsUser
+is set then the strategy should ensure that it falls within the bounds of acceptable values.  If
+the field is not set then validation should assume that the field will be set by the `CreateSecurityConstraints`
+call.
+2.  Hard Validation: If any field is not set to an acceptable value then fail validation.
 
 #### Creation of a Security Context Based on Security Context Constraints
 
@@ -225,7 +218,7 @@ There are three scenarios under which a security context constraint field may fa
 
 1.  Governed by a boolean: fields of this type will be defaulted to the most restrictive value.
 For instance, `AllowPrivilegedContainer` will always be set to false if unspecified.
-1.  Goverened by an allowable set: fields of this type will be checked against the set to ensure
+1.  Governed by an allowable set: fields of this type will be checked against the set to ensure
 their value is allowed.  For example, `AllowedCapabilities` will ensure that only capabilities
 that are allowed to be requested are considered valid.  `HostNetworkSources` will ensure that
 only pods created from source X are allowed to request access to the host network.
@@ -237,10 +230,9 @@ strategies must implement.
 Some items of the security context only need to be allocated a single time.  For instance if the
 cluster defines that each namespace should have a block of UIDs used for allocation to service
 accounts then the allocator may allocate UID 1000 to service account X for the lifetime of the
-service account.  This allocation can be stored as an annotation on the namespace level so
-that it is uneditable.  Allocation of a UID to a user may be stored on the user object.  When
-a security context is generated on behalf of security context constraints it should first check
-the annotations for pre-allocated values and use them if appropriate.
+service account.  This allocation can be stored as an annotation on the namespace or service account level so
+that it is uneditable.  When a security context is generated on behalf of security context
+constraints it should first check the annotations for pre-allocated values and use them if appropriate.
 
 Some strategies such as a "allow pods to run as any user" will not need to store annotations.
 
@@ -269,7 +261,7 @@ type RunAsUserSecurityContextConstraintsStrategy interface {
 
 An administrator may wish to create a resource in a namespace that runs with
 escalated privileges.  This is similar to saying `sudo make me a pod`.  By allowing security context
-constraints to operate on both an user and service account level, administrators are able to
+constraints to operate on both the requesting user and pod's service account administrators are able to
 create pods in namespaces with elevated privileges based on the administrator's security context
 constraints.
 
