@@ -22,6 +22,7 @@ import (
 	"runtime"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/api/v1"
 	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/api/v1beta1"
 	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/api/v1beta2"
 	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/api/v1beta3"
@@ -64,7 +65,7 @@ func main() {
 		nameOut = file
 	}
 
-	generator := pkg_runtime.NewGenerator(api.Scheme.Raw())
+	generator := pkg_runtime.NewConversionGenerator(api.Scheme.Raw())
 	// TODO(wojtek-t): Change the overwrites to a flag.
 	generator.OverwritePackage(*version, "")
 	generator.OverwritePackage("api", "newer")

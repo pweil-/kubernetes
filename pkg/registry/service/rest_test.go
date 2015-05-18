@@ -17,8 +17,6 @@ limitations under the License.
 package service
 
 import (
-	"bytes"
-	"encoding/gob"
 	"net"
 	"strings"
 	"testing"
@@ -27,6 +25,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest/resttest"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/conversion"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/registrytest"
@@ -54,13 +53,11 @@ func makeIPNet(t *testing.T) *net.IPNet {
 }
 
 func deepCloneService(svc *api.Service) *api.Service {
-	buff := new(bytes.Buffer)
-	enc := gob.NewEncoder(buff)
-	dec := gob.NewDecoder(buff)
-	enc.Encode(svc)
-	result := new(api.Service)
-	dec.Decode(result)
-	return result
+	value, err := conversion.DeepCopy(svc)
+	if err != nil {
+		panic("couldn't copy service")
+	}
+	return value.(*api.Service)
 }
 
 func TestServiceRegistryCreate(t *testing.T) {
@@ -530,11 +527,19 @@ func TestServiceRegistryIPAllocation(t *testing.T) {
 		t.Errorf("Unexpected PortalIP: %s", created_service_2.Spec.PortalIP)
 	}
 
+	testIPs := []string{"1.2.3.93", "1.2.3.94", "1.2.3.95", "1.2.3.96"}
+	testIP := ""
+	for _, ip := range testIPs {
+		if !rest.portals.(*ipallocator.Range).Has(net.ParseIP(ip)) {
+			testIP = ip
+		}
+	}
+
 	svc3 := &api.Service{
 		ObjectMeta: api.ObjectMeta{Name: "quux"},
 		Spec: api.ServiceSpec{
 			Selector:        map[string]string{"bar": "baz"},
-			PortalIP:        "1.2.3.93",
+			PortalIP:        testIP,
 			SessionAffinity: api.AffinityTypeNone,
 			Ports: []api.ServicePort{{
 				Port:     6502,
@@ -548,7 +553,7 @@ func TestServiceRegistryIPAllocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	created_service_3 := created_svc3.(*api.Service)
-	if created_service_3.Spec.PortalIP != "1.2.3.93" { // specific IP
+	if created_service_3.Spec.PortalIP != testIP { // specific IP
 		t.Errorf("Unexpected PortalIP: %s", created_service_3.Spec.PortalIP)
 	}
 }

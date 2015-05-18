@@ -65,6 +65,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/service"
 	ipallocator "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/service/ipallocator"
 	etcdipallocator "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/service/ipallocator/etcd"
+	serviceaccountetcd "github.com/GoogleCloudPlatform/kubernetes/pkg/registry/serviceaccount/etcd"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/ui"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
@@ -91,6 +92,10 @@ type Config struct {
 	EnableUISupport       bool
 	// allow downstream consumers to disable swagger
 	EnableSwaggerSupport bool
+	// allow v1beta1 to be conditionally disabled
+	DisableV1Beta1 bool
+	// allow v1beta2 to be conditionally disabled
+	DisableV1Beta2 bool
 	// allow v1beta3 to be conditionally disabled
 	DisableV1Beta3 bool
 	// allow v1 to be conditionally enabled
@@ -159,6 +164,8 @@ type Master struct {
 	authorizer            authorizer.Authorizer
 	admissionControl      admission.Interface
 	masterCount           int
+	v1beta1               bool
+	v1beta2               bool
 	v1beta3               bool
 	v1                    bool
 	requestContextMapper  api.RequestContextMapper
@@ -303,6 +310,8 @@ func New(c *Config) *Master {
 		authenticator:         c.Authenticator,
 		authorizer:            c.Authorizer,
 		admissionControl:      c.AdmissionControl,
+		v1beta1:               !c.DisableV1Beta1,
+		v1beta2:               !c.DisableV1Beta2,
 		v1beta3:               !c.DisableV1Beta3,
 		v1:                    c.EnableV1,
 		requestContextMapper:  c.RequestContextMapper,
@@ -398,6 +407,7 @@ func (m *Master) init(c *Config) {
 
 	resourceQuotaStorage, resourceQuotaStatusStorage := resourcequotaetcd.NewStorage(c.EtcdHelper)
 	secretStorage := secretetcd.NewStorage(c.EtcdHelper)
+	serviceAccountStorage := serviceaccountetcd.NewStorage(c.EtcdHelper)
 	persistentVolumeStorage, persistentVolumeStatusStorage := pvetcd.NewStorage(c.EtcdHelper)
 	persistentVolumeClaimStorage, persistentVolumeClaimStatusStorage := pvcetcd.NewStorage(c.EtcdHelper)
 
@@ -449,6 +459,7 @@ func (m *Master) init(c *Config) {
 		"namespaces/status":             namespaceStatusStorage,
 		"namespaces/finalize":           namespaceFinalizeStorage,
 		"secrets":                       secretStorage,
+		"serviceAccounts":               serviceAccountStorage,
 		"persistentVolumes":             persistentVolumeStorage,
 		"persistentVolumes/status":      persistentVolumeStatusStorage,
 		"persistentVolumeClaims":        persistentVolumeClaimStorage,
@@ -457,12 +468,18 @@ func (m *Master) init(c *Config) {
 		"componentStatuses": componentstatus.NewStorage(func() map[string]apiserver.Server { return m.getServersToValidate(c, false) }),
 	}
 
-	apiVersions := []string{"v1beta1", "v1beta2"}
-	if err := m.api_v1beta1().InstallREST(m.handlerContainer); err != nil {
-		glog.Fatalf("Unable to setup API v1beta1: %v", err)
+	apiVersions := []string{}
+	if m.v1beta1 {
+		if err := m.api_v1beta1().InstallREST(m.handlerContainer); err != nil {
+			glog.Fatalf("Unable to setup API v1beta1: %v", err)
+		}
+		apiVersions = append(apiVersions, "v1beta1")
 	}
-	if err := m.api_v1beta2().InstallREST(m.handlerContainer); err != nil {
-		glog.Fatalf("Unable to setup API v1beta2: %v", err)
+	if m.v1beta2 {
+		if err := m.api_v1beta2().InstallREST(m.handlerContainer); err != nil {
+			glog.Fatalf("Unable to setup API v1beta2: %v", err)
+		}
+		apiVersions = append(apiVersions, "v1beta2")
 	}
 	if m.v1beta3 {
 		if err := m.api_v1beta3().InstallREST(m.handlerContainer); err != nil {
@@ -583,7 +600,7 @@ func (m *Master) NewBootstrapController() *Controller {
 
 		ReadOnlyServiceIP:         m.serviceReadOnlyIP,
 		ReadOnlyServicePort:       m.serviceReadOnlyPort,
-		PublicReadOnlyServicePort: m.serviceReadOnlyPort,
+		PublicReadOnlyServicePort: m.publicReadOnlyPort,
 	}
 }
 
@@ -711,7 +728,7 @@ func (m *Master) api_v1beta2() *apiserver.APIGroupVersion {
 func (m *Master) api_v1beta3() *apiserver.APIGroupVersion {
 	storage := make(map[string]rest.Storage)
 	for k, v := range m.storage {
-		if k == "minions" {
+		if k == "minions" || k == "minions/status" {
 			continue
 		}
 		storage[strings.ToLower(k)] = v
@@ -727,7 +744,7 @@ func (m *Master) api_v1beta3() *apiserver.APIGroupVersion {
 func (m *Master) api_v1() *apiserver.APIGroupVersion {
 	storage := make(map[string]rest.Storage)
 	for k, v := range m.storage {
-		if k == "minions" {
+		if k == "minions" || k == "minions/status" {
 			continue
 		}
 		storage[strings.ToLower(k)] = v

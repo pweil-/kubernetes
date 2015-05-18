@@ -269,8 +269,10 @@ type PersistentVolumeSpec struct {
 	PersistentVolumeSource `json:",inline" description:"the actual volume backing the persistent volume"`
 	// AccessModes contains all ways the volume can be mounted
 	AccessModes []AccessModeType `json:"accessModes,omitempty" description:"all ways the volume can be mounted"`
-	// holds the binding reference to a PersistentVolumeClaim
-	ClaimRef *ObjectReference `json:"claimRef,omitempty" description:"the binding reference to a persistent volume claim"`
+	// ClaimRef is part of a bi-directional binding between PersistentVolume and PersistentVolumeClaim.
+	// ClaimRef is expected to be non-nil when bound.
+	// claim.VolumeName is the authoritative bind between PV and PVC.
+	ClaimRef *ObjectReference `json:"claimRef,omitempty" description:"when bound, a reference to the bound claim"`
 }
 
 type PersistentVolumeStatus struct {
@@ -280,7 +282,7 @@ type PersistentVolumeStatus struct {
 
 type PersistentVolumeList struct {
 	TypeMeta `json:",inline"`
-	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#types-kinds`
+	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#types-kinds"`
 	Items    []PersistentVolume `json:"items,omitempty" description:"list of persistent volumes"`
 }
 
@@ -290,7 +292,7 @@ type PersistentVolumeClaim struct {
 	ObjectMeta `json:"metadata,omitempty" description:"standard object metadata; see http://docs.k8s.io/api-conventions.md#metadata"`
 
 	// Spec defines the volume requested by a pod author
-	Spec PersistentVolumeClaimSpec `json:"spec,omitempty" description: "the desired characteristics of a volume"`
+	Spec PersistentVolumeClaimSpec `json:"spec,omitempty" description:"the desired characteristics of a volume"`
 
 	// Status represents the current information about a claim
 	Status PersistentVolumeClaimStatus `json:"status,omitempty" description:"the current status of a persistent volume claim; read-only"`
@@ -298,8 +300,8 @@ type PersistentVolumeClaim struct {
 
 type PersistentVolumeClaimList struct {
 	TypeMeta `json:",inline"`
-	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#types-kinds`
-	Items    []PersistentVolumeClaim `json:"items,omitempty" description: "a list of persistent volume claims"`
+	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#types-kinds"`
+	Items    []PersistentVolumeClaim `json:"items,omitempty" description:"a list of persistent volume claims"`
 }
 
 // PersistentVolumeClaimSpec describes the common attributes of storage devices
@@ -309,6 +311,8 @@ type PersistentVolumeClaimSpec struct {
 	AccessModes []AccessModeType `json:"accessModes,omitempty" description:"the desired access modes the volume should have"`
 	// Resources represents the minimum resources required
 	Resources ResourceRequirements `json:"resources,omitempty" description:"the desired resources the volume should have"`
+	// VolumeName is the binding reference to the PersistentVolume backing this claim
+	VolumeName string `json:"volumeName,omitempty" description:"the binding reference to the persistent volume backing this claim"`
 }
 
 type PersistentVolumeClaimStatus struct {
@@ -318,8 +322,6 @@ type PersistentVolumeClaimStatus struct {
 	AccessModes []AccessModeType `json:"accessModes,omitempty" description:"the actual access modes the volume has"`
 	// Represents the actual resources of the underlying volume
 	Capacity ResourceList `json:"capacity,omitempty" description:"the actual resources the volume has"`
-	// VolumeRef is a reference to the PersistentVolume bound to the PersistentVolumeClaim
-	VolumeRef *ObjectReference `json:"volumeRef,omitempty" description:"a reference to the backing persistent volume, when bound"`
 }
 
 type AccessModeType string
@@ -811,10 +813,14 @@ type PodSpec struct {
 	// a termination signal and the time when the processes are forcibly halted with a kill signal.
 	// Set this value longer than the expected cleanup time for your process.
 	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty" description:"optional duration in seconds the pod needs to terminate gracefully; may be decreased in delete request; value must be non-negative integer; the value zero indicates delete immediately; if this value is not set, the default grace period will be used instead; the grace period is the duration in seconds after the processes running in the pod are sent a termination signal and the time when the processes are forcibly halted with a kill signal; set this value longer than the expected cleanup time for your process"`
+	ActiveDeadlineSeconds         *int64 `json:"activeDeadlineSeconds,omitempty" description:"optional duration in seconds the pod may be active on the node relative to StartTime before the system will actively try to mark it failed and kill associated containers; value must be a positive integer`
 	// Optional: Set DNS policy.  Defaults to "ClusterFirst"
 	DNSPolicy DNSPolicy `json:"dnsPolicy,omitempty" description:"DNS policy for containers within the pod; one of 'ClusterFirst' or 'Default'"`
 	// NodeSelector is a selector which must be true for the pod to fit on a node
 	NodeSelector map[string]string `json:"nodeSelector,omitempty" description:"selector which must match a node's labels for the pod to be scheduled on that node"`
+
+	// ServiceAccount is the name of the ServiceAccount to use to run this pod
+	ServiceAccount string `json:"serviceAccount" description:"name of the ServiceAccount to use to run this pod"`
 
 	// Host is a request to schedule this pod onto a specific host.  If it is non-empty,
 	// the the scheduler simply schedules this pod onto that host, assuming that it fits
@@ -836,6 +842,8 @@ type PodStatus struct {
 
 	HostIP string `json:"hostIP,omitempty" description:"IP address of the host to which the pod is assigned; empty if not yet scheduled"`
 	PodIP  string `json:"podIP,omitempty" description:"IP address allocated to the pod; routable at least within the cluster; empty if not yet allocated"`
+
+	StartTime *util.Time `json:"startTime,omitempty" description:"RFC 3339 date and time at which the object was acknowledged by the Kubelet.  This is before the Kubelet pulled the container image(s) for the pod."`
 
 	// The list has one entry per container in the manifest. Each entry is currently the output
 	// of `docker inspect`.
@@ -868,7 +876,7 @@ type Pod struct {
 // PodList is a list of Pods.
 type PodList struct {
 	TypeMeta `json:",inline"`
-	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#types-kinds`
+	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#types-kinds"`
 
 	Items []Pod `json:"items" description:"list of pods"`
 }
@@ -1034,6 +1042,26 @@ type ServiceList struct {
 	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#metadata"`
 
 	Items []Service `json:"items" description:"list of services"`
+}
+
+// ServiceAccount binds together:
+// * a name, understood by users, and perhaps by peripheral systems, for an identity
+// * a principal that can be authenticated and authorized
+// * a set of secrets
+type ServiceAccount struct {
+	TypeMeta   `json:",inline"`
+	ObjectMeta `json:"metadata,omitempty" description:"standard object metadata; see http://docs.k8s.io/api-conventions.md#metadata"`
+
+	// Secrets is the list of secrets allowed to be used by pods running using this ServiceAccount
+	Secrets []ObjectReference `json:"secrets" description:"list of secrets that can be used by pods running as this service account" patchStrategy:"merge" patchMergeKey:"name"`
+}
+
+// ServiceAccountList is a list of ServiceAccount objects
+type ServiceAccountList struct {
+	TypeMeta `json:",inline"`
+	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://docs.k8s.io/api-conventions.md#metadata"`
+
+	Items []ServiceAccount `json:"items" description:"list of ServiceAccounts"`
 }
 
 // Endpoints is a collection of endpoints that implement the actual service.  Example:
@@ -1322,6 +1350,9 @@ type PodLogOptions struct {
 
 	// If true, follow the logs for the pod
 	Follow bool `json:"follow,omitempty" description:"follow the log stream of the pod; defaults to false"`
+
+	//  If true, return previous terminated container logs
+	Previous bool `json:"previous,omitempty" description:"return previous terminated container logs; defaults to false"`
 }
 
 // PodExecOptions is the query options to a Pod's remote exec call
@@ -1705,7 +1736,23 @@ const MaxSecretSize = 1 * 1024 * 1024
 type SecretType string
 
 const (
-	SecretTypeOpaque SecretType = "Opaque" // Default; arbitrary user-defined data
+	// SecretTypeOpaque is the default; arbitrary user-defined data
+	SecretTypeOpaque SecretType = "Opaque"
+
+	// SecretTypeServiceAccountToken contains a token that identifies a service account to the API
+	//
+	// Required fields:
+	// - Secret.Annotations["kubernetes.io/service-account.name"] - the name of the ServiceAccount the token identifies
+	// - Secret.Annotations["kubernetes.io/service-account.uid"] - the UID of the ServiceAccount the token identifies
+	// - Secret.Data["token"] - a token that identifies the service account to the API
+	SecretTypeServiceAccountToken SecretType = "kubernetes.io/service-account-token"
+
+	// ServiceAccountNameKey is the key of the required annotation for SecretTypeServiceAccountToken secrets
+	ServiceAccountNameKey = "kubernetes.io/service-account.name"
+	// ServiceAccountUIDKey is the key of the required annotation for SecretTypeServiceAccountToken secrets
+	ServiceAccountUIDKey = "kubernetes.io/service-account.uid"
+	// ServiceAccountTokenKey is the key of the required data for SecretTypeServiceAccountToken secrets
+	ServiceAccountTokenKey = "token"
 )
 
 type SecretList struct {
@@ -1788,4 +1835,60 @@ type RangeAllocation struct {
 
 	Range string `json:"range" description:"a range string that identifies the range represented by 'data'; required"`
 	Data  []byte `json:"data" description:"a bit array containing all allocated addresses in the previous segment"`
+}
+
+// SecurityContextConstraints governs the ability to make requests that affect the SecurityContext
+// that will be applied to a container.
+type SecurityContextConstraints struct {
+	TypeMeta   `json:",inline"`
+	ObjectMeta `json:"metadata,omitempty"`
+
+	// AllowPrivilegedContainer determines if a container can request to be run as privileged.
+	AllowPrivilegedContainer bool
+	// AllowedCapabilities is a list of capabilities that can be requested to add to the container.
+	AllowedCapabilities []CapabilityType
+	// AllowHostDirVolumePlugin determines if the policy allow containers to use the HostDir volume plugin
+	AllowHostDirVolumePlugin bool
+	// SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
+	SELinuxContext SELinuxContextStrategyType
+	// RunAsUser is the strategy that will dictate what RunAsUser is used in the SecurityContext.
+	RunAsUser RunAsUserStrategyType
+
+	// The users who have permissions to use this security context constraints
+	Users []string
+	// The groups that have permission to use this security context constraints
+	Groups []string
+}
+
+// SELinuxContextStrategyType denotes strategy types for generating SELinux options for a
+// SecurityContext
+type SELinuxContextStrategyType string
+// RunAsUserStrategyType denotes strategy types for generating RunAsUser values for a
+// SecurityContext
+type RunAsUserStrategyType string
+
+const (
+	// container must have SELinux labels of X applied.
+	SELinuxStrategyMustRunAs SELinuxContextStrategyType = "MustRunAs"
+	// container may make requests for any SELinux context labels.
+	SELinuxStrategyRunAsAny SELinuxContextStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	SELinuxStrategyRunAsDefault SELinuxContextStrategyType = "RunAsDefault"
+
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAs RunAsUserStrategyType = "MustRunAs"
+	// container must run as a non-root uid
+	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategyType = "MustRunAsNonRoot"
+	// container may make requests for any uid.
+	RunAsUserStrategyRunAsAny RunAsUserStrategyType = "RunAsAny"
+	// containers must run with the default settings, their requests are ignored
+	RunAsUserStrategyRunAsDefault RunAsUserStrategyType = "RunAsDefault"
+)
+
+// SecurityContextConstraintsList is a list of SecurityContextConstraints objects
+type SecurityContextConstraintsList struct {
+	TypeMeta `json:",inline"`
+	ListMeta `json:"metadata,omitempty"`
+
+	Items []SecurityContextConstraints `json:"items"`
 }

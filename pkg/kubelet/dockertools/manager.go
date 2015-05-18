@@ -28,8 +28,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
 	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/lifecycle"
@@ -51,6 +53,9 @@ const (
 	podOomScoreAdj = -100
 
 	maxReasonCacheEntries = 200
+
+	kubernetesPodLabel       = "io.kubernetes.pod.data"
+	kubernetesContainerLabel = "io.kubernetes.container.name"
 )
 
 // DockerManager implements the Runtime interface.
@@ -215,7 +220,7 @@ func (dm *DockerManager) GetContainerLogs(pod *api.Pod, containerID, tail string
 		Stderr:       true,
 		OutputStream: stdout,
 		ErrorStream:  stderr,
-		Timestamps:   true,
+		Timestamps:   false,
 		RawTerminal:  false,
 		Follow:       follow,
 	}
@@ -472,13 +477,79 @@ func (dm *DockerManager) GetPodInfraContainer(pod kubecontainer.Pod) (kubecontai
 	return kubecontainer.Container{}, fmt.Errorf("unable to find pod infra container for pod %v", pod.ID)
 }
 
-func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, opts *kubecontainer.RunContainerOptions, ref *api.ObjectReference) (string, error) {
+// makeEnvList converts EnvVar list to a list of strings, in the form of
+// '<key>=<value>', which can be understood by docker.
+func makeEnvList(envs []kubecontainer.EnvVar) (result []string) {
+	for _, env := range envs {
+		result = append(result, fmt.Sprintf("%s=%s", env.Name, env.Value))
+	}
+	return
+}
+
+// makeMountBindings converts the mount list to a list of strings that
+// can be understood by docker.
+// Each element in the string is in the form of:
+// '<HostPath>:<ContainerPath>', or
+// '<HostPath>:<ContainerPath>:ro', if the path is read only.
+func makeMountBindings(mounts []kubecontainer.Mount) (result []string) {
+	for _, m := range mounts {
+		bind := fmt.Sprintf("%s:%s", m.HostPath, m.ContainerPath)
+		if m.ReadOnly {
+			bind += ":ro"
+		}
+		result = append(result, bind)
+	}
+	return
+}
+
+func makePortsAndBindings(portMappings []kubecontainer.PortMapping) (map[docker.Port]struct{}, map[docker.Port][]docker.PortBinding) {
+	exposedPorts := map[docker.Port]struct{}{}
+	portBindings := map[docker.Port][]docker.PortBinding{}
+	for _, port := range portMappings {
+		exteriorPort := port.HostPort
+		if exteriorPort == 0 {
+			// No need to do port binding when HostPort is not specified
+			continue
+		}
+		interiorPort := port.ContainerPort
+		// Some of this port stuff is under-documented voodoo.
+		// See http://stackoverflow.com/questions/20428302/binding-a-port-to-a-host-interface-using-the-rest-api
+		var protocol string
+		switch strings.ToUpper(string(port.Protocol)) {
+		case "UDP":
+			protocol = "/udp"
+		case "TCP":
+			protocol = "/tcp"
+		default:
+			glog.Warningf("Unknown protocol %q: defaulting to TCP", port.Protocol)
+			protocol = "/tcp"
+		}
+		dockerPort := docker.Port(strconv.Itoa(interiorPort) + protocol)
+		exposedPorts[dockerPort] = struct{}{}
+		portBindings[dockerPort] = []docker.PortBinding{
+			{
+				HostPort: strconv.Itoa(exteriorPort),
+				HostIP:   port.HostIP,
+			},
+		}
+	}
+	return exposedPorts, portBindings
+}
+
+func (dm *DockerManager) runContainer(
+	pod *api.Pod,
+	container *api.Container,
+	opts *kubecontainer.RunContainerOptions,
+	ref *api.ObjectReference,
+	netMode string,
+	ipcMode string) (string, error) {
+
 	dockerName := KubeletContainerName{
 		PodFullName:   kubecontainer.GetPodFullName(pod),
 		PodUID:        pod.UID,
 		ContainerName: container.Name,
 	}
-	exposedPorts, portBindings := makePortsAndBindings(container)
+	exposedPorts, portBindings := makePortsAndBindings(opts.PortMappings)
 
 	// TODO(vmarmol): Handle better.
 	// Cap hostname at 63 chars (specification is 64bytes which is 63 chars and the null terminating char).
@@ -491,10 +562,21 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 	labels := map[string]string{
 		"io.kubernetes.pod.name": namespacedName.String(),
 	}
+	if container.Lifecycle != nil && container.Lifecycle.PreStop != nil {
+		glog.V(1).Infof("Setting preStop hook")
+		// TODO: This is kind of hacky, we should really just encode the bits we need.
+		data, err := latest.Codec.Encode(pod)
+		if err != nil {
+			glog.Errorf("Failed to encode pod: %s for prestop hook", pod.Name)
+		} else {
+			labels[kubernetesPodLabel] = string(data)
+			labels[kubernetesContainerLabel] = container.Name
+		}
+	}
 	dockerOpts := docker.CreateContainerOptions{
 		Name: BuildDockerName(dockerName, container),
 		Config: &docker.Config{
-			Env:          opts.Envs,
+			Env:          makeEnvList(opts.Envs),
 			ExposedPorts: exposedPorts,
 			Hostname:     containerHostname,
 			Image:        container.Image,
@@ -523,6 +605,8 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 		dm.recorder.Eventf(ref, "created", "Created with docker id %v", dockerContainer.ID)
 	}
 
+	binds := makeMountBindings(opts.Mounts)
+
 	// The reason we create and mount the log file in here (not in kubelet) is because
 	// the file's location depends on the ID of the container, and we need to create and
 	// mount the file before actually starting the container.
@@ -537,15 +621,15 @@ func (dm *DockerManager) runContainer(pod *api.Pod, container *api.Container, op
 		} else {
 			fs.Close() // Close immediately; we're just doing a `touch` here
 			b := fmt.Sprintf("%s:%s", containerLogPath, container.TerminationMessagePath)
-			opts.Binds = append(opts.Binds, b)
+			binds = append(binds, b)
 		}
 	}
 
 	hc := &docker.HostConfig{
 		PortBindings: portBindings,
-		Binds:        opts.Binds,
-		NetworkMode:  opts.NetMode,
-		IpcMode:      opts.IpcMode,
+		Binds:        binds,
+		NetworkMode:  netMode,
+		IpcMode:      ipcMode,
 	}
 	if len(opts.DNS) > 0 {
 		hc.DNS = opts.DNS
@@ -578,40 +662,6 @@ func setEntrypointAndCommand(container *api.Container, opts *docker.CreateContai
 	if len(container.Args) != 0 {
 		opts.Config.Cmd = container.Args
 	}
-}
-
-func makePortsAndBindings(container *api.Container) (map[docker.Port]struct{}, map[docker.Port][]docker.PortBinding) {
-	exposedPorts := map[docker.Port]struct{}{}
-	portBindings := map[docker.Port][]docker.PortBinding{}
-	for _, port := range container.Ports {
-		exteriorPort := port.HostPort
-		if exteriorPort == 0 {
-			// No need to do port binding when HostPort is not specified
-			continue
-		}
-		interiorPort := port.ContainerPort
-		// Some of this port stuff is under-documented voodoo.
-		// See http://stackoverflow.com/questions/20428302/binding-a-port-to-a-host-interface-using-the-rest-api
-		var protocol string
-		switch strings.ToUpper(string(port.Protocol)) {
-		case "UDP":
-			protocol = "/udp"
-		case "TCP":
-			protocol = "/tcp"
-		default:
-			glog.Warningf("Unknown protocol %q: defaulting to TCP", port.Protocol)
-			protocol = "/tcp"
-		}
-		dockerPort := docker.Port(strconv.Itoa(interiorPort) + protocol)
-		exposedPorts[dockerPort] = struct{}{}
-		portBindings[dockerPort] = []docker.PortBinding{
-			{
-				HostPort: strconv.Itoa(exteriorPort),
-				HostIP:   port.HostIP,
-			},
-		}
-	}
-	return exposedPorts, portBindings
 }
 
 // A helper function to get the KubeletContainerName and hash from a docker
@@ -723,7 +773,7 @@ func (dm *DockerManager) ListImages() ([]kubecontainer.Image, error) {
 
 // TODO(vmarmol): Consider unexporting.
 // PullImage pulls an image from network to local storage.
-func (dm *DockerManager) PullImage(image kubecontainer.ImageSpec, _ []api.Secret) error {
+func (dm *DockerManager) PullImage(image kubecontainer.ImageSpec, secrets []api.Secret) error {
 	return dm.Puller.Pull(image.Image)
 }
 
@@ -874,8 +924,45 @@ func (dm *DockerManager) RunInContainer(containerID string, cmd []string) ([]byt
 		RawTerminal:  false,
 	}
 	err = dm.client.StartExec(execObj.ID, startOpts)
+	if err != nil {
+		return nil, err
+	}
+	tick := time.Tick(2 * time.Second)
+	for {
+		inspect, err2 := dm.client.InspectExec(execObj.ID)
+		if err2 != nil {
+			return buf.Bytes(), err2
+		}
+		if !inspect.Running {
+			if inspect.ExitCode != 0 {
+				err = &dockerExitError{inspect}
+			}
+			break
+		}
+		<-tick
+	}
 
 	return buf.Bytes(), err
+}
+
+type dockerExitError struct {
+	Inspect *docker.ExecInspect
+}
+
+func (d *dockerExitError) String() string {
+	return d.Error()
+}
+
+func (d *dockerExitError) Error() string {
+	return fmt.Sprintf("Error executing in Docker Container: %d", d.Inspect.ExitCode)
+}
+
+func (d *dockerExitError) Exited() bool {
+	return !d.Inspect.Running
+}
+
+func (d *dockerExitError) ExitStatus() int {
+	return d.Inspect.ExitCode
 }
 
 // ExecInContainer uses nsenter to run the command inside the container identified by containerID.
@@ -1054,9 +1141,41 @@ func (dm *DockerManager) KillContainer(containerID types.UID) error {
 func (dm *DockerManager) killContainer(containerID types.UID) error {
 	ID := string(containerID)
 	glog.V(2).Infof("Killing container with id %q", ID)
+	inspect, err := dm.client.InspectContainer(ID)
+	if err != nil {
+		return err
+	}
+	var found bool
+	var preStop string
+	if inspect != nil && inspect.Config != nil && inspect.Config.Labels != nil {
+		preStop, found = inspect.Config.Labels[kubernetesPodLabel]
+	}
+	if found {
+		var pod api.Pod
+		err := latest.Codec.DecodeInto([]byte(preStop), &pod)
+		if err != nil {
+			glog.Errorf("Failed to decode prestop: %s, %s", preStop, ID)
+		} else {
+			name := inspect.Config.Labels[kubernetesContainerLabel]
+			var container *api.Container
+			for ix := range pod.Spec.Containers {
+				if pod.Spec.Containers[ix].Name == name {
+					container = &pod.Spec.Containers[ix]
+					break
+				}
+			}
+			if container != nil {
+				glog.V(1).Infof("Running preStop hook")
+				if err := dm.runner.Run(ID, &pod, container, container.Lifecycle.PreStop); err != nil {
+					glog.Errorf("failed to run preStop hook: %v", err)
+				}
+			} else {
+				glog.Errorf("unable to find container %v, %s", pod, name)
+			}
+		}
+	}
 	dm.readinessManager.RemoveReadiness(ID)
-	err := dm.client.StopContainer(ID, 10)
-
+	err = dm.client.StopContainer(ID, 10)
 	ref, ok := dm.containerRefManager.GetRef(ID)
 	if !ok {
 		glog.Warningf("No ref for pod '%v'", ID)
@@ -1074,12 +1193,12 @@ func (dm *DockerManager) runContainerInPod(pod *api.Pod, container *api.Containe
 		glog.Errorf("Couldn't make a ref to pod %v, container %v: '%v'", pod.Name, container.Name, err)
 	}
 
-	opts, err := dm.generator.GenerateRunContainerOptions(pod, container, netMode, ipcMode)
+	opts, err := dm.generator.GenerateRunContainerOptions(pod, container)
 	if err != nil {
 		return "", err
 	}
 
-	id, err := dm.runContainer(pod, container, opts, ref)
+	id, err := dm.runContainer(pod, container, opts, ref, netMode, ipcMode)
 	if err != nil {
 		return "", err
 	}
@@ -1145,6 +1264,7 @@ func (dm *DockerManager) createPodInfraContainer(pod *api.Pod) (kubeletTypes.Doc
 		return "", err
 	}
 	if !ok {
+		// TODO get the pull secrets from the container's ImageSpec and the pod's service account
 		if err := dm.PullImage(spec, nil); err != nil {
 			if ref != nil {
 				dm.recorder.Eventf(ref, "failed", "Failed to pull image %q: %v", container.Image, err)
@@ -1173,7 +1293,8 @@ func (dm *DockerManager) createPodInfraContainer(pod *api.Pod) (kubeletTypes.Doc
 	if containerInfo.State.Pid == 0 {
 		return "", fmt.Errorf("failed to get init PID for Docker pod infra container %q", string(id))
 	}
-	return id, util.ApplyOomScoreAdj(containerInfo.State.Pid, podOomScoreAdj)
+	util.ApplyOomScoreAdj(containerInfo.State.Pid, podOomScoreAdj)
+	return id, nil
 }
 
 // TODO(vmarmol): This will soon be made non-public when its only use is internal.
@@ -1335,6 +1456,7 @@ func (dm *DockerManager) pullImage(pod *api.Pod, container *api.Container) error
 		return nil
 	}
 
+	// TODO get the pull secrets from the container's ImageSpec and the pod's service account
 	err = dm.PullImage(spec, nil)
 	dm.runtimeHooks.ReportImagePull(pod, container, err)
 	return err
