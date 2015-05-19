@@ -46,6 +46,7 @@ type Interface interface {
 	PersistentVolumesInterface
 	PersistentVolumeClaimsNamespacer
 	ComponentStatusesInterface
+	SecurityContextConstraintsNamespacer
 }
 
 func (c *Client) ReplicationControllers(namespace string) ReplicationControllerInterface {
@@ -54,6 +55,10 @@ func (c *Client) ReplicationControllers(namespace string) ReplicationControllerI
 
 func (c *Client) Nodes() NodeInterface {
 	return newNodes(c)
+}
+
+func (c *Client) SecurityContextConstraints() SecurityContextConstraintsInterface {
+	return newSecurityContextConstraints(c)
 }
 
 func (c *Client) Events(namespace string) EventInterface {
