@@ -27,7 +27,7 @@ import (
 // embedded into a struct to get a default implementation. This makes faking out just
 // the method you want to test easier.
 type FakeSecurityContextConstraints struct {
-	Fake      *Fake
+	Fake *Fake
 }
 
 func (c *FakeSecurityContextConstraints) List(labels labels.Selector, field fields.Selector) (*api.SecurityContextConstraintsList, error) {

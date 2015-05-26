@@ -46,9 +46,7 @@ func TestCreate(t *testing.T) {
 	storage := NewStorage(helper)
 	test := resttest.New(t, storage, fakeEtcdClient.SetError).ClusterScope()
 	scc := validNewSecurityContextConstraints("foo")
-
-	//TODO https://github.com/GoogleCloudPlatform/kubernetes/issues/8451
-	scc.ObjectMeta = api.ObjectMeta{}
+	scc.ObjectMeta = api.ObjectMeta{GenerateName: "foo-"}
 	test.TestCreate(
 		// valid
 		scc,

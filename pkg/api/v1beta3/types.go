@@ -1943,18 +1943,45 @@ type SecurityContextConstraints struct {
 	// AllowPrivilegedContainer determines if a container can request to be run as privileged.
 	AllowPrivilegedContainer bool `json:"allowPrivilegedContainer,omitempty" description:"allow containers to run as privileged"`
 	// AllowedCapabilities is a list of capabilities that can be requested to add to the container.
-	AllowedCapabilities []CapabilityType `json:"allowedCapabilities,omitempty" description:"capabilities that are allowed to be added"`
+	AllowedCapabilities []Capability `json:"allowedCapabilities,omitempty" description:"capabilities that are allowed to be added"`
 	// AllowHostDirVolumePlugin determines if the policy allow containers to use the HostDir volume plugin
 	AllowHostDirVolumePlugin bool `json:"allowHostDirVolumePlugin,omitempty" description:"allow the use of the host dir volume plugin"`
 	// SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
-	SELinuxContext SELinuxContextStrategyType `json:"seLinuxContext,omitempty" description:"strategy used to generate SELinuxOptions"`
+	SELinuxContext SELinuxContextStrategyOptions `json:"seLinuxContext,omitempty" description:"strategy used to generate SELinuxOptions"`
 	// RunAsUser is the strategy that will dictate what RunAsUser is used in the SecurityContext.
-	RunAsUser RunAsUserStrategyType `json:"runAsUser,omitempty" description:"strategy used to generate RunAsUser"`
+	RunAsUser RunAsUserStrategyOptions `json:"runAsUser,omitempty" description:"strategy used to generate RunAsUser"`
 
 	// The users who have permissions to use this security context constraints
 	Users []string `json:"users,omitempty" description:"users allowed to use this SecurityContextConstraints"`
 	// The groups that have permission to use this security context constraints
 	Groups []string `json:"groups,omitempty" description:"groups allowed to use this SecurityContextConstraints"`
+}
+
+// SELinuxContextStrategyOptions defines the strategy type and any options used to create the strategy.
+type SELinuxContextStrategyOptions struct {
+	// Type is the strategy that will dictate what SELinux context is used in the SecurityContext.
+	Type SELinuxContextStrategyType `json:"type,omitempty" description:"strategy used to generate the SELinux context"`
+	// seLinuxOptions required to run as; required for MustRunAs
+	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty" description:"seLinuxOptions required to run as; required for MustRunAs"`
+}
+
+// RunAsUserStrategyOptions defines the strategy type and any options used to create the strategy.
+type RunAsUserStrategyOptions struct {
+	// Type is the strategy that will dictate what RunAsUser is used in the SecurityContext.
+	Type RunAsUserStrategyType `json:"type,omitempty" description:"strategy used to generate RunAsUser"`
+	// UID is the user id that containers must run as.  Required for the MustRunAs strategy if not using
+	// namespace/service account allocated uids.
+	UID *int64 `json:"uid,omitempty" description:"the uid to always run as; required for MustRunAs"`
+	// AllocatedIDAnnotation provides an annotation that the strategy can look for if it should
+	// use a pre-allocated UID that exists on the namespace or service account.
+	AllocatedIDAnnotation string `json:"allocatedIDAnnotation,omitempty" description:"how the strategy can discover pre-allocated ids on the namespace or service account"`
+	// UIDRangeMin defines the min value for a strategy that allocates by range.
+	UIDRangeMin int64 `json:"uidRangeMin,omitempty" description:"min value for range based allocators"`
+	// UIDRangeMax defines the max value for a strategy that allocates by range.
+	UIDRangeMax int64 `json:"uidRangeMax,omitempty" description:"max value for range based allocators"`
+	// UIDRangeAnnotation provides an annotation that the strategy can look for if ranges
+	// are preallocated and assigned to the namespace or service account.
+	UIDRangeAnnotation string `json:"uidRangeAnnotation,omitempty" description:"how the strategy can discover pre-allocated ranges on the namespace or service account"`
 }
 
 // SELinuxContextStrategyType denotes strategy types for generating SELinux options for a
@@ -1970,8 +1997,6 @@ const (
 	SELinuxStrategyMustRunAs SELinuxContextStrategyType = "MustRunAs"
 	// container may make requests for any SELinux context labels.
 	SELinuxStrategyRunAsAny SELinuxContextStrategyType = "RunAsAny"
-	// containers must run with the default settings, their requests are ignored
-	SELinuxStrategyRunAsDefault SELinuxContextStrategyType = "RunAsDefault"
 
 	// container must run as a particular uid.
 	RunAsUserStrategyMustRunAs RunAsUserStrategyType = "MustRunAs"
@@ -1979,8 +2004,6 @@ const (
 	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategyType = "MustRunAsNonRoot"
 	// container may make requests for any uid.
 	RunAsUserStrategyRunAsAny RunAsUserStrategyType = "RunAsAny"
-	// containers must run with the default settings, their requests are ignored
-	RunAsUserStrategyRunAsDefault RunAsUserStrategyType = "RunAsDefault"
 )
 
 // SecurityContextConstraintsList is a list of SecurityContextConstraints objects
