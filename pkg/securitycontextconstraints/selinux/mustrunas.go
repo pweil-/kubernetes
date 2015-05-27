@@ -31,6 +31,9 @@ func NewMustRunAs(options *api.SELinuxContextStrategyOptions) (SELinuxSecurityCo
 	if options == nil {
 		return nil, fmt.Errorf("MustRunAs requires SELinuxContextStrategyOptions")
 	}
+	if options.SELinuxOptions == nil {
+		return nil, fmt.Errorf("MustRunAs requires SELinuxOptoins")
+	}
 	return &mustRunAs{
 		opts: options,
 	}, nil

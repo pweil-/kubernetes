@@ -24,16 +24,13 @@ import (
 // runAsAny implements the interface RunAsUserSecurityContextConstraintsStrategy.
 type runAsAny struct{}
 
-// NewRunAsAny provides a strategy that will return the configured run as user or nil.
+// NewRunAsAny provides a strategy that will return nil.
 func NewRunAsAny(options *api.RunAsUserStrategyOptions) (RunAsUserSecurityContextConstraintsStrategy, error) {
 	return &runAsAny{}, nil
 }
 
 // Generate creates the uid based on policy rules.
 func (s *runAsAny) Generate(pod *api.Pod, container *api.Container) (*int64, error) {
-	if container.SecurityContext != nil {
-		return container.SecurityContext.RunAsUser, nil
-	}
 	return nil, nil
 }
 

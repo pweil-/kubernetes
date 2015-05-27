@@ -23,11 +23,11 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
 
-type SecurityContextConstraintsNamespacer interface {
-	SecurityContextConstraints() SecurityContextConstraintsInterface
+type SecurityContextConstraintsInterface interface {
+	SecurityContextConstraints() SecurityContextConstraintInterface
 }
 
-type SecurityContextConstraintsInterface interface {
+type SecurityContextConstraintInterface interface {
 	Get(name string) (result *api.SecurityContextConstraints, err error)
 	Create(scc *api.SecurityContextConstraints) (*api.SecurityContextConstraints, error)
 	List(label labels.Selector, field fields.Selector) (*api.SecurityContextConstraintsList, error)
@@ -36,7 +36,7 @@ type SecurityContextConstraintsInterface interface {
 	Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error)
 }
 
-// securityContextConstraints implements SecurityContextConstraintsInterface
+// securityContextConstraints implements SecurityContextConstraintInterface
 type securityContextConstraints struct {
 	client *Client
 }

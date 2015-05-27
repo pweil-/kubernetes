@@ -83,7 +83,7 @@ func (c *Fake) Nodes() client.NodeInterface {
 	return &FakeNodes{Fake: c}
 }
 
-func (c *Fake) SecurityContextConstraints() client.SecurityContextConstraintsInterface {
+func (c *Fake) SecurityContextConstraints() client.SecurityContextConstraintInterface {
 	return &FakeSecurityContextConstraints{Fake: c}
 }
 

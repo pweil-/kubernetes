@@ -21,11 +21,11 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
 )
 
-// SecurityContextConstraintsAllocator provides the implementation to generate a new security
+// SecurityContextConstraintsProvider provides the implementation to generate a new security
 // context based on constraints or validate an existing security context against constraints.
-type SecurityContextConstraintsAllocator interface {
+type SecurityContextConstraintsProvider interface {
 	// Create a SecurityContext based on the given constraints
-	CreateSecurityContext(pod *api.Pod, container *api.Container, constraints *api.SecurityContextConstraints) (*api.SecurityContext, error)
+	CreateSecurityContext(pod *api.Pod, container *api.Container) (*api.SecurityContext, error)
 	// Ensure a container's SecurityContext is in compliance with the given constraints
-	ValidateSecurityContext(pod *api.Pod, container *api.Container, constraints *api.SecurityContextConstraints) fielderrors.ValidationErrorList
+	ValidateSecurityContext(pod *api.Pod, container *api.Container) fielderrors.ValidationErrorList
 }

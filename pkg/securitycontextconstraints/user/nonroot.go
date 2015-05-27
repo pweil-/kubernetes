@@ -16,10 +16,38 @@ limitations under the License.
 
 package user
 
-import "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+import (
+	"fmt"
+
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
+)
 
 type nonRoot struct{}
 
 func NewRunAsNonRoot(options *api.RunAsUserStrategyOptions) (RunAsUserSecurityContextConstraintsStrategy, error) {
+	return &nonRoot{}, nil
+}
+
+// Generate creates the uid based on policy rules.  This strategy does return a UID.  It assumes
+// that the user will specify a UID or the container image specifies a UID.
+func (s *nonRoot) Generate(pod *api.Pod, container *api.Container) (*int64, error) {
 	return nil, nil
+}
+
+// Validate ensures that the specified values fall within the range of the strategy.  Validation
+// of this will pass if either the UID is not set, assuming that the image will provided the UID
+// or if the UID is set it is not root.  In order to work properly this assumes that the kubelet
+// will populate an
+func (s *nonRoot) Validate(pod *api.Pod, container *api.Container) fielderrors.ValidationErrorList {
+	allErrs := fielderrors.ValidationErrorList{}
+	if container.SecurityContext == nil {
+		allErrs = append(allErrs, fmt.Errorf("Unable to validate nil security context for container %s", container.Name))
+		return allErrs
+	}
+	if container.SecurityContext.RunAsUser != nil && *container.SecurityContext.RunAsUser == 0 {
+		allErrs = append(allErrs, fmt.Errorf("Running with the root UID is forbidden by the security context constraints %s", container.Name))
+		return allErrs
+	}
+	return allErrs
 }

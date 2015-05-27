@@ -23,7 +23,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
 
-// FakeSecurityContextConstraints implements SecurityContextConstraintsInterface. Meant to be
+// FakeSecurityContextConstraints implements SecurityContextConstraintInterface. Meant to be
 // embedded into a struct to get a default implementation. This makes faking out just
 // the method you want to test easier.
 type FakeSecurityContextConstraints struct {

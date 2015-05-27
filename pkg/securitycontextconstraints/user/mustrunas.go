@@ -19,24 +19,24 @@ package user
 import (
 	"fmt"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
 )
 
 // mustRunAs implements the RunAsUserSecurityContextConstraintsStrategy interface
 type mustRunAs struct {
 	opts   *api.RunAsUserStrategyOptions
-	client client.Interface
 }
 
 // NewMustRunAs provides a strategy that requires the container to run as a specific UID.
-func NewMustRunAs(options *api.RunAsUserStrategyOptions, client client.Interface) (RunAsUserSecurityContextConstraintsStrategy, error) {
+func NewMustRunAs(options *api.RunAsUserStrategyOptions) (RunAsUserSecurityContextConstraintsStrategy, error) {
+	if options == nil {
+		return nil, fmt.Errorf("MustRunAs requires run as user options")
+	}
 	if options.UID == nil {
 		return nil, fmt.Errorf("MustRunAs requires a UID")
 	}
 	return &mustRunAs{
 		opts:   options,
-		client: client,
 	}, nil
 }
 

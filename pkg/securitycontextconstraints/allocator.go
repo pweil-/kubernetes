@@ -18,6 +18,7 @@ package securitycontextconstraints
 
 import (
 	"fmt"
+
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontextconstraints/selinux"
@@ -25,20 +26,24 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
 )
 
-// simpleAllocator is the default implementatoin of SecurityContextConstraintsAllocator
-type simpleAllocator struct {
-	scc               api.SecurityContextConstraints
+// simpleProvider is the default implementation of SecurityContextConstraintsProvider
+type simpleProvider struct {
+	scc               *api.SecurityContextConstraints
 	runAsUserStrategy user.RunAsUserSecurityContextConstraintsStrategy
 	seLinuxStrategy   selinux.SELinuxSecurityContextConstraintsStrategy
 	client            client.Interface
 }
 
-func NewSimpleAllocator(scc api.SecurityContextConstraints, client client.Interface) (SecurityContextConstraintsAllocator, error) {
+func NewSimpleProvider(scc *api.SecurityContextConstraints, client client.Interface) (SecurityContextConstraintsProvider, error) {
+	if client == nil || scc == nil {
+		return nil, fmt.Errorf("NewSimpleProvider requires a client and SecurityContextConstraints")
+	}
+
 	var userStrat user.RunAsUserSecurityContextConstraintsStrategy = nil
 	var err error = nil
 	switch scc.RunAsUser.Type {
 	case api.RunAsUserStrategyMustRunAs:
-		userStrat, err = user.NewMustRunAs(&scc.RunAsUser, client)
+		userStrat, err = user.NewMustRunAs(&scc.RunAsUser)
 	case api.RunAsUserStrategyMustRunAsNonRoot:
 		userStrat, err = user.NewRunAsNonRoot(&scc.RunAsUser)
 	case api.RunAsUserStrategyRunAsAny:
@@ -64,7 +69,7 @@ func NewSimpleAllocator(scc api.SecurityContextConstraints, client client.Interf
 		return nil, err
 	}
 
-	return &simpleAllocator{
+	return &simpleProvider{
 		scc:               scc,
 		runAsUserStrategy: userStrat,
 		seLinuxStrategy:   seLinuxStrat,
@@ -75,7 +80,7 @@ func NewSimpleAllocator(scc api.SecurityContextConstraints, client client.Interf
 // Create a SecurityContext based on the given constraints.  If a setting is already set on the
 // container's security context then it will not be changed.  Validation should be used after
 // the context is created to ensure it complies with the required restrictions.
-func (s *simpleAllocator) CreateSecurityContext(pod *api.Pod, container *api.Container, constraints *api.SecurityContextConstraints) (*api.SecurityContext, error) {
+func (s *simpleProvider) CreateSecurityContext(pod *api.Pod, container *api.Container) (*api.SecurityContext, error) {
 	var sc *api.SecurityContext = nil
 	if container.SecurityContext != nil {
 		sc = container.SecurityContext
@@ -109,7 +114,7 @@ func (s *simpleAllocator) CreateSecurityContext(pod *api.Pod, container *api.Con
 }
 
 // Ensure a container's SecurityContext is in compliance with the given constraints
-func (s *simpleAllocator) ValidateSecurityContext(pod *api.Pod, container *api.Container, constraints *api.SecurityContextConstraints) fielderrors.ValidationErrorList {
+func (s *simpleProvider) ValidateSecurityContext(pod *api.Pod, container *api.Container) fielderrors.ValidationErrorList {
 	allErrs := fielderrors.ValidationErrorList{}
 
 	if container.SecurityContext == nil {
@@ -140,6 +145,17 @@ func (s *simpleAllocator) ValidateSecurityContext(pod *api.Pod, container *api.C
 		}
 	}
 
-	// TODO host dir plugin
+	if !s.scc.AllowHostDirVolumePlugin {
+		for _, vm := range container.VolumeMounts {
+			volume, err := s.client.PersistentVolumes().Get(vm.Name)
+			if err != nil {
+				allErrs = append(allErrs, fmt.Errorf("unable to validate volume %s: %s", vm.Name, err.Error()))
+				continue
+			}
+			if volume.Spec.HostPath != nil {
+				allErrs = append(allErrs, fielderrors.NewFieldInvalid("container.VolumeMounts", vm.Name, "Host Volumes are not allowed to be used"))
+			}
+		}
+	}
 	return allErrs
 }

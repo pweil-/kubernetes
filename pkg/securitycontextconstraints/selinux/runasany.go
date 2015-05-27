@@ -31,9 +31,6 @@ func NewRunAsAny(options *api.SELinuxContextStrategyOptions) (SELinuxSecurityCon
 
 // Generate creates the SELinuxOptions based on constraint rules.
 func (s *runAsAny) Generate(pod *api.Pod, container *api.Container) (*api.SELinuxOptions, error) {
-	if container.SecurityContext != nil {
-		return container.SecurityContext.SELinuxOptions, nil
-	}
 	return nil, nil
 }
 
