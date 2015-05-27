@@ -60,16 +60,6 @@ referencing specific service accounts themselves.
 
 ### Model
 
-The model for a security context constraint is a combination of the security context constraint
-itself and cluster wide strategies enforced by an allocator.  The separation of concerns falls into
-two distinct categories: permissions that the pod can request and runtime parameters the cluster
-admin controls.
-
-An example of a permission that can be requested is to run a pod as privileged.  This is set on a
-pod by pod basis.  A cluster wide setting may be the allocation of user ids that pods must run under.
-The cluster administrator may decide that no pod can run as the root user in their cluster and
-provide a block of UIDs that the allocator can use to distribute amongst namespaces.
-
 A security context constraint object exists in the root scope, outside of a namespace.  The
 security context constraints will reference users and groups that are allowed
 to operate under the constraints.  In order to support this, `ServiceAccounts` must be mapped
@@ -78,8 +68,8 @@ context to treat users, groups, and service accounts uniformly.
 
 Below is a list of security context constraints which will likely serve most use cases:
 
-1.  A default constraints object.  This object may include a `system:authenticated` group and will
-likely be the most restrictive set of constraints.
+1.  A default constraints object.  This object is permissioned to something covers all actors such
+as a `system:authenticated` group and will likely be the most restrictive set of constraints.
 1.  A default constraints object for service accounts.  This object can be identified as serving
 a group identified by `system:service-accounts` which can be imposed by the service account authenticator / token generator.
 1.  Cluster admin constraints identified by `system:cluster-admins` group - a set of constraints with elevated privileges that can be used
@@ -235,14 +225,6 @@ will not overwrite fields already set in the container.
 3.  Validate that the generated SecurityContext falls within the boundaries of the security context
 constraints and accept or reject the pod.
 
-Note on validation:  Since a user may have more than one security context constraint that they
-are allowed to use validation should take place in two steps.
-
-1.  Soft Validation: Ensure that any requests on the pod fall within the constraint.  If a field like RunAsUser
-is set then the strategy should ensure that it falls within the bounds of acceptable values.  If
-the field is not set then validation should assume that the field will be set by the `CreateSecurityConstraints`
-call.
-2.  Hard Validation: If any field is not set to an acceptable value then fail validation.
 
 ## Creation of a Security Context Based on Security Context Constraints
 
@@ -309,12 +291,13 @@ will be user aware administrators would still be able to run the commands that a
 
 ## Interaction with the Kubelet
 
-In some cases interaction with the kubelet is necessary.  An example of this is a cluster
-that is configured to run with a UID strategy of `RunAsUserStrategyMustRunAsNonRoot` but without
-a UID allocator.
+In certain cases, the kubelet may need provide information about
+the image in order to validate the security context.  An example of this is a cluster
+that is configured to run with a UID strategy of `RunAsUserStrategyMustRunAsNonRoot`.
 
 In this case the validation can either require that the pod be submitted with a non-root `RunAsUser`
-set in the security context or assume that images run in the cluster will be providing the user.  In
-this case, if a pod reaches the kubelet and does not have a user set by the image then the kubelet
-should not run the pod.
+set in the security context, use a pre-allocation strategy, or assume that images run in the cluster
+will be providing the user.  In this case, if a pod reaches the kubelet and does not have a user set
+in the security context the kubelet should inspect the image, determine if a user is set in the
+image configuration, and ensure that the value complies with the constraints.
 
