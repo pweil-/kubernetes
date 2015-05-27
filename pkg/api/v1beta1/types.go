@@ -1889,16 +1889,10 @@ type RunAsUserStrategyOptions struct {
 	// UID is the user id that containers must run as.  Required for the MustRunAs strategy if not using
 	// namespace/service account allocated uids.
 	UID *int64 `json:"uid,omitempty" description:"the uid to always run as; required for MustRunAs"`
-	// AllocatedIDAnnotation provides an annotation that the strategy can look for if it should
-	// use a pre-allocated UID that exists on the namespace or service account.
-	AllocatedIDAnnotation string `json:"allocatedIDAnnotation,omitempty" description:"how the strategy can discover pre-allocated ids on the namespace or service account"`
 	// UIDRangeMin defines the min value for a strategy that allocates by range.
 	UIDRangeMin int64 `json:"uidRangeMin,omitempty" description:"min value for range based allocators"`
 	// UIDRangeMax defines the max value for a strategy that allocates by range.
 	UIDRangeMax int64 `json:"uidRangeMax,omitempty" description:"max value for range based allocators"`
-	// UIDRangeAnnotation provides an annotation that the strategy can look for if ranges
-	// are preallocated and assigned to the namespace or service account.
-	UIDRangeAnnotation string `json:"uidRangeAnnotation,omitempty" description:"how the strategy can discover pre-allocated ranges on the namespace or service account"`
 }
 
 // SELinuxContextStrategyType denotes strategy types for generating SELinux options for a

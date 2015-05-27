@@ -31,8 +31,8 @@ type mustRunAs struct {
 
 // NewMustRunAs provides a strategy that requires the container to run as a specific UID.
 func NewMustRunAs(options *api.RunAsUserStrategyOptions, client client.Interface) (RunAsUserSecurityContextConstraintsStrategy, error) {
-	if len(options.AllocatedIDAnnotation) == 0 && options.UID == nil {
-		return nil, fmt.Errorf("MustRunAs requires a UID or an annotation")
+	if options.UID == nil {
+		return nil, fmt.Errorf("MustRunAs requires a UID")
 	}
 	return &mustRunAs{
 		opts:   options,
@@ -40,13 +40,8 @@ func NewMustRunAs(options *api.RunAsUserStrategyOptions, client client.Interface
 	}, nil
 }
 
-// Generate creates the uid based on policy rules.  MustRunAs requires that can either
-// retrieve a pre-allocated UID from the service account (if specified) or the namespace.  If
-// no annotation is specified on the strategy then it will return the configured UID.
+// Generate creates the uid based on policy rules.  MustRunAs returns the UID it is initialized with.
 func (s *mustRunAs) Generate(pod *api.Pod, container *api.Container) (*int64, error) {
-	if len(s.opts.AllocatedIDAnnotation) > 0 {
-		return GetAllocatedID(s.client, pod, s.opts.AllocatedIDAnnotation)
-	}
 	return s.opts.UID, nil
 }
 
@@ -63,25 +58,8 @@ func (s *mustRunAs) Validate(pod *api.Pod, container *api.Container) fielderrors
 		return allErrs
 	}
 
-	var uid *int64 = nil
-
-	if len(s.opts.AllocatedIDAnnotation) > 0 {
-		u, err := GetAllocatedID(s.client, pod, s.opts.AllocatedIDAnnotation)
-		if err != nil {
-			allErrs = append(allErrs, fmt.Errorf("Annotation was specified but an error was encountered retrieving the UID %v", err))
-		}
-		uid = u
-	} else {
-		uid = s.opts.UID
-	}
-
-	// couldn't get a UID from the annotation and don't have a UID set on the strategy
-	if uid == nil {
-		allErrs = append(allErrs, fmt.Errorf("UID for MustRunAs strategy is nil"))
-		return allErrs
-	}
-	if *uid != *container.SecurityContext.RunAsUser {
-		allErrs = append(allErrs, fmt.Errorf("UID on container %s does not match required UID.  Found %d, wanted %d", container.Name, *uid, *container.SecurityContext.RunAsUser))
+	if *s.opts.UID != *container.SecurityContext.RunAsUser {
+		allErrs = append(allErrs, fmt.Errorf("UID on container %s does not match required UID.  Found %d, wanted %d", container.Name, *s.opts.UID, *container.SecurityContext.RunAsUser))
 	}
 
 	return allErrs

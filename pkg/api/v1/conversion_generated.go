@@ -1868,10 +1868,8 @@ func convert_api_RunAsUserStrategyOptions_To_v1_RunAsUserStrategyOptions(in *api
 	} else {
 		out.UID = nil
 	}
-	out.AllocatedIDAnnotation = in.AllocatedIDAnnotation
 	out.UIDRangeMin = in.UIDRangeMin
 	out.UIDRangeMax = in.UIDRangeMax
-	out.UIDRangeAnnotation = in.UIDRangeAnnotation
 	return nil
 }
 
@@ -4226,10 +4224,8 @@ func convert_v1_RunAsUserStrategyOptions_To_api_RunAsUserStrategyOptions(in *Run
 	} else {
 		out.UID = nil
 	}
-	out.AllocatedIDAnnotation = in.AllocatedIDAnnotation
 	out.UIDRangeMin = in.UIDRangeMin
 	out.UIDRangeMax = in.UIDRangeMax
-	out.UIDRangeAnnotation = in.UIDRangeAnnotation
 	return nil
 }
 
