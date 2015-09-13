@@ -37,6 +37,7 @@ type ExperimentalInterface interface {
 	DaemonSetsNamespacer
 	DeploymentsNamespacer
 	JobsNamespacer
+	PodSecurityPoliciesInterface
 }
 
 // ExperimentalClient is used to interact with experimental Kubernetes features.
@@ -73,6 +74,10 @@ func (c *ExperimentalClient) ServerAPIVersions() (*api.APIVersions, error) {
 		return nil, fmt.Errorf("got '%s': %v", string(body), err)
 	}
 	return &v, nil
+}
+
+func (c *ExperimentalClient) PodSecurityPolicies() PodSecurityPolicyInterface {
+	return newPodSecurityPolicy(c)
 }
 
 func (c *ExperimentalClient) HorizontalPodAutoscalers(namespace string) HorizontalPodAutoscalerInterface {

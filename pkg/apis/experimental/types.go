@@ -540,3 +540,101 @@ type IngressBackend struct {
 	// Specifies the protocol of the referenced service.
 	Protocol api.Protocol `json:"protocol,omitempty"`
 }
+
+// PodSecurityPolicy governs the ability to make requests that affect the SecurityContext
+// that will be applied to a container.
+type PodSecurityPolicy struct {
+	unversioned.TypeMeta   `json:",inline"`
+	api.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec defines the policy enforced.
+	Spec PodSecurityPolicySpec `json:"spec,omitempty"`
+}
+
+// PodSecurityPolicySpec defines the policy enforced.
+type PodSecurityPolicySpec struct {
+	// Privileged determines if a container can request to be run as privileged.
+	Privileged bool `json:"privileged,omitempty"`
+	// Capabilities is a list of capabilities that can be requested to add to the container.
+	Capabilities []api.Capability `json:"capabilities,omitempty"`
+	// HostPath determines if the policy allows containers to use the HostDir volume plugin
+	HostPath bool `json:"hostPath,omitempty"`
+	// HostNetwork determines if the policy allows the use of HostNetwork in the pod spec.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+	// HostPorts determines which host port ranges it will allow containers to use.  If empty,
+	// containers may not bind to host ports.
+	HostPorts []HostPortRange `json:"hostPorts,omitempty"`
+	// SELinuxContext is the strategy that will dictate the allowable labels that may be set in the SecurityContext.
+	SELinuxContext SELinuxContextStrategyOptions `json:"seLinuxContext,omitempty"`
+	// RunAsUser is the strategy that will dictate the allowable RunAsUser values that may be set in the SecurityContext.
+	RunAsUser RunAsUserStrategyOptions `json:"runAsUser,omitempty"`
+
+	// The users who have permissions to use this policy
+	Users []string `json:"users,omitempty"`
+	// The groups that have permission to use this policy
+	Groups []string `json:"groups,omitempty"`
+}
+
+// PodSecurityPolicyPortRange defines a range of host ports that will be enabled by a policy
+// for pods to use.  It requires both the start and end to be defined.
+type HostPortRange struct {
+	// Start is the beginning of the port range which will be allowed.
+	Start int `json:"start"`
+	// End is the end of the port range which will be allowed.
+	End int `json:"end"`
+}
+
+// SELinuxContextStrategyOptions defines the strategy type and any options used to create the strategy.
+type SELinuxContextStrategyOptions struct {
+	// Type is the strategy that will dictate the allowable labels that may be set in the SecurityContext.
+	Type SELinuxContextStrategy `json:"type"`
+	// seLinuxOptions required to run as; required for MustRunAs
+	SELinuxOptions *api.SELinuxOptions `json:"seLinuxOptions,omitempty"`
+}
+
+// SELinuxContextStrategyType denotes strategy types for generating SELinux options for a
+// SecurityContext
+type SELinuxContextStrategy string
+
+const (
+	// container must have SELinux labels of X applied.
+	SELinuxStrategyMustRunAs SELinuxContextStrategy = "MustRunAs"
+	// container may make requests for any SELinux context labels.
+	SELinuxStrategyRunAsAny SELinuxContextStrategy = "RunAsAny"
+)
+
+// RunAsUserStrategyOptions defines the strategy type and any options used to create the strategy.
+type RunAsUserStrategyOptions struct {
+	// Type is the strategy that will dictate the allowable RunAsUser values that may be set in the SecurityContext.
+	Type RunAsUserStrategy `json:"type"`
+	// UID is the user id that containers must run as.  Required for the MustRunAs strategy if not using
+	// a strategy that supports pre-allocated uids.
+	UID *int64 `json:"uid,omitempty"`
+	// UIDRangeMin defines the min value for a strategy that allocates by a range based strategy.
+	UIDRangeMin *int64 `json:"uidRangeMin,omitempty"`
+	// UIDRangeMax defines the max value for a strategy that allocates by a range based strategy.
+	UIDRangeMax *int64 `json:"uidRangeMax,omitempty"`
+}
+
+// RunAsUserStrategyType denotes strategy types for generating RunAsUser values for a
+// SecurityContext.
+type RunAsUserStrategy string
+
+const (
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAs RunAsUserStrategy = "MustRunAs"
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAsRange RunAsUserStrategy = "MustRunAsRange"
+	// container must run as a non-root uid
+	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategy = "MustRunAsNonRoot"
+	// container may make requests for any uid.
+	RunAsUserStrategyRunAsAny RunAsUserStrategy = "RunAsAny"
+)
+
+// PodSecurityPolicyList is a list of PodSecurityPolicy objects.
+type PodSecurityPolicyList struct {
+	unversioned.TypeMeta `json:",inline"`
+	unversioned.ListMeta `json:"metadata,omitempty"`
+
+	Items []PodSecurityPolicy `json:"items"`
+}

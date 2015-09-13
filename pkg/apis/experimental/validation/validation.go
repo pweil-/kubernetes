@@ -19,6 +19,7 @@ package validation
 import (
 	"strconv"
 
+	"fmt"
 	"k8s.io/kubernetes/pkg/api"
 	apivalidation "k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/apis/experimental"
@@ -369,5 +370,52 @@ func ValidateJobSpecUpdate(oldSpec, spec experimental.JobSpec) errs.ValidationEr
 func ValidateJobStatusUpdate(oldStatus, status experimental.JobStatus) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 	allErrs = append(allErrs, ValidateJobStatus(&status)...)
+	return allErrs
+}
+
+// ValidatePodSecurityPolicyName can be used to check whether the given
+// pod security policy name is valid.
+// Prefix indicates this name will be used as part of generation, in which case
+// trailing dashes are allowed.
+func ValidatePodSecurityPolicyName(name string, prefix bool) (bool, string) {
+	return apivalidation.NameIsDNSSubdomain(name, prefix)
+}
+
+func ValidatePodSecurityPolicy(psp *experimental.PodSecurityPolicy) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&psp.ObjectMeta, false, ValidatePodSecurityPolicyName).Prefix("metadata")...)
+
+	// ensure the user strat has a valid type
+	switch psp.Spec.RunAsUser.Type {
+	case experimental.RunAsUserStrategyMustRunAs, experimental.RunAsUserStrategyMustRunAsNonRoot, experimental.RunAsUserStrategyRunAsAny, experimental.RunAsUserStrategyMustRunAsRange:
+	//good types
+	default:
+		msg := fmt.Sprintf("invalid strategy type.  Valid values are %s, %s, %s", experimental.RunAsUserStrategyMustRunAs, experimental.RunAsUserStrategyMustRunAsNonRoot, experimental.RunAsUserStrategyRunAsAny)
+		allErrs = append(allErrs, errs.NewFieldInvalid("runAsUser.type", psp.Spec.RunAsUser.Type, msg))
+	}
+
+	// if specified, uid cannot be negative
+	if psp.Spec.RunAsUser.UID != nil {
+		if *psp.Spec.RunAsUser.UID < 0 {
+			allErrs = append(allErrs, errs.NewFieldInvalid("runAsUser.uid", *psp.Spec.RunAsUser.UID, "uid cannot be negative"))
+		}
+	}
+
+	// ensure the selinux strat has a valid type
+	switch psp.Spec.SELinuxContext.Type {
+	case experimental.SELinuxStrategyMustRunAs, experimental.SELinuxStrategyRunAsAny:
+	//good types
+	default:
+		msg := fmt.Sprintf("invalid strategy type.  Valid values are %s, %s", experimental.SELinuxStrategyMustRunAs, experimental.SELinuxStrategyRunAsAny)
+		allErrs = append(allErrs, errs.NewFieldInvalid("seLinuxContext.type", psp.Spec.RunAsUser.Type, msg))
+	}
+
+	return allErrs
+}
+
+func ValidatePodSecurityPolicyUpdate(old *experimental.PodSecurityPolicy, new *experimental.PodSecurityPolicy) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
+	allErrs = append(allErrs, apivalidation.ValidateObjectMetaUpdate(&old.ObjectMeta, &new.ObjectMeta).Prefix("metadata")...)
+	allErrs = append(allErrs, ValidatePodSecurityPolicy(new)...)
 	return allErrs
 }

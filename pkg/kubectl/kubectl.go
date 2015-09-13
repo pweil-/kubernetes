@@ -96,6 +96,7 @@ func expandResourceShortcut(resource string) string {
 		"no":     "nodes",
 		"ns":     "namespaces",
 		"po":     "pods",
+		"psp":    "podSecurityPolicies",
 		"pv":     "persistentvolumes",
 		"pvc":    "persistentvolumeclaims",
 		"quota":  "resourcequotas",

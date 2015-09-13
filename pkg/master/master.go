@@ -63,6 +63,7 @@ import (
 	pvetcd "k8s.io/kubernetes/pkg/registry/persistentvolume/etcd"
 	pvcetcd "k8s.io/kubernetes/pkg/registry/persistentvolumeclaim/etcd"
 	podetcd "k8s.io/kubernetes/pkg/registry/pod/etcd"
+	pspetcd "k8s.io/kubernetes/pkg/registry/podsecuritypolicy/etcd"
 	podtemplateetcd "k8s.io/kubernetes/pkg/registry/podtemplate/etcd"
 	resourcequotaetcd "k8s.io/kubernetes/pkg/registry/resourcequota/etcd"
 	secretetcd "k8s.io/kubernetes/pkg/registry/secret/etcd"
@@ -961,6 +962,7 @@ func (m *Master) experimental(c *Config) *apiserver.APIGroupVersion {
 	daemonSetStorage, daemonSetStatusStorage := daemonetcd.NewREST(c.ExpDatabaseStorage)
 	deploymentStorage := deploymentetcd.NewStorage(c.ExpDatabaseStorage)
 	jobStorage, jobStatusStorage := jobetcd.NewREST(c.ExpDatabaseStorage)
+	podSecurityPolicyStorage := pspetcd.NewREST(c.ExpDatabaseStorage)
 
 	thirdPartyControl := ThirdPartyController{
 		master: m,
@@ -984,6 +986,7 @@ func (m *Master) experimental(c *Config) *apiserver.APIGroupVersion {
 		strings.ToLower("deployments/scale"):            deploymentStorage.Scale,
 		strings.ToLower("jobs"):                         jobStorage,
 		strings.ToLower("jobs/status"):                  jobStatusStorage,
+		strings.ToLower("podSecurityPolicies"):          podSecurityPolicyStorage,
 	}
 
 	expMeta := latest.GroupOrDie("experimental")

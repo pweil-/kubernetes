@@ -24,6 +24,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/apis/experimental"
 	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/fielderrors"
 	errors "k8s.io/kubernetes/pkg/util/fielderrors"
 )
 
@@ -845,6 +846,158 @@ func TestValidateJob(t *testing.T) {
 			if err.Field != s[0] || !strings.Contains(err.Error(), s[1]) {
 				t.Errorf("unexpected error: %v, expected: %s", errs[0], k)
 			}
+		}
+	}
+}
+
+func TestValidatePodSecurityPolicy(t *testing.T) {
+	var invalidUID int64 = -1
+	errorCases := map[string]struct {
+		scc         *experimental.PodSecurityPolicy
+		errorType   fielderrors.ValidationErrorType
+		errorDetail string
+	}{
+		"no user options": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyMustRunAs,
+					},
+				},
+			},
+			errorType:   errors.ValidationErrorTypeInvalid,
+			errorDetail: "invalid strategy type.  Valid values are MustRunAs, MustRunAsNonRoot, RunAsAny",
+		},
+		"no selinux options": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyMustRunAs,
+					},
+				},
+			},
+			errorType:   errors.ValidationErrorTypeInvalid,
+			errorDetail: "invalid strategy type.  Valid values are MustRunAs, RunAsAny",
+		},
+		"invalid user strategy type": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: "invalid",
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyMustRunAs,
+					},
+				},
+			},
+			errorType:   errors.ValidationErrorTypeInvalid,
+			errorDetail: "invalid strategy type.  Valid values are MustRunAs, MustRunAsNonRoot, RunAsAny",
+		},
+		"invalid selinux strategy type": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyMustRunAs,
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: "invalid",
+					},
+				},
+			},
+			errorType:   errors.ValidationErrorTypeInvalid,
+			errorDetail: "invalid strategy type.  Valid values are MustRunAs, RunAsAny",
+		},
+		"invalid uid": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyMustRunAs,
+						UID:  &invalidUID,
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyMustRunAs,
+					},
+				},
+			},
+			errorType:   errors.ValidationErrorTypeInvalid,
+			errorDetail: "uid cannot be negative",
+		},
+		"missing object meta name": {
+			scc: &experimental.PodSecurityPolicy{
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyMustRunAs,
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyMustRunAs,
+					},
+				},
+			},
+			errorType:   errors.ValidationErrorTypeRequired,
+			errorDetail: "name or generateName is required",
+		},
+	}
+
+	for k, v := range errorCases {
+		if errs := ValidatePodSecurityPolicy(v.scc); len(errs) == 0 || errs[0].(*errors.ValidationError).Type != v.errorType || errs[0].(*errors.ValidationError).Detail != v.errorDetail {
+			t.Errorf("Expected error type %s with detail %s for %s, got %v", v.errorType, v.errorDetail, k, errs)
+		}
+	}
+
+	var validUID int64 = 1
+	successCases := map[string]struct {
+		scc *experimental.PodSecurityPolicy
+	}{
+		"must run as": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyMustRunAs,
+						UID:  &validUID,
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyMustRunAs,
+					},
+				},
+			},
+		},
+		"run as any": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyRunAsAny,
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyRunAsAny,
+					},
+				},
+			},
+		},
+		"run as non-root (user only)": {
+			scc: &experimental.PodSecurityPolicy{
+				ObjectMeta: api.ObjectMeta{Name: "foo"},
+				Spec: experimental.PodSecurityPolicySpec{
+					RunAsUser: experimental.RunAsUserStrategyOptions{
+						Type: experimental.RunAsUserStrategyMustRunAsNonRoot,
+					},
+					SELinuxContext: experimental.SELinuxContextStrategyOptions{
+						Type: experimental.SELinuxStrategyRunAsAny,
+					},
+				},
+			},
+		},
+	}
+
+	for k, v := range successCases {
+		if errs := ValidatePodSecurityPolicy(v.scc); len(errs) != 0 {
+			t.Errorf("Expected success for %s, got %v", k, errs)
 		}
 	}
 }

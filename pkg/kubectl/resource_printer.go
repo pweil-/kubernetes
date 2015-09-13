@@ -398,6 +398,7 @@ var thirdPartyResourceColumns = []string{"NAME", "DESCRIPTION", "VERSION(S)"}
 var horizontalPodAutoscalerColumns = []string{"NAME", "REFERENCE", "TARGET", "CURRENT", "MINPODS", "MAXPODS", "AGE"}
 var withNamespacePrefixColumns = []string{"NAMESPACE"} // TODO(erictune): print cluster name too.
 var deploymentColumns = []string{"NAME", "UPDATEDREPLICAS", "AGE"}
+var podSecurityPolicyColumns = []string{"NAME", "PRIV", "CAPS", "HOSTDIR", "SELINUX", "RUNASUSER"}
 
 // addDefaultHandlers adds print handlers for default Kubernetes types.
 func (h *HumanReadablePrinter) addDefaultHandlers() {
@@ -441,6 +442,8 @@ func (h *HumanReadablePrinter) addDefaultHandlers() {
 	h.Handler(deploymentColumns, printDeploymentList)
 	h.Handler(horizontalPodAutoscalerColumns, printHorizontalPodAutoscaler)
 	h.Handler(horizontalPodAutoscalerColumns, printHorizontalPodAutoscalerList)
+	h.Handler(podSecurityPolicyColumns, printPodSecurityPolicy)
+	h.Handler(podSecurityPolicyColumns, printPodSecurityPolicyList)
 }
 
 func (h *HumanReadablePrinter) unknown(data []byte, w io.Writer) error {
@@ -1313,6 +1316,23 @@ func printHorizontalPodAutoscalerList(list *experimental.HorizontalPodAutoscaler
 			return err
 		}
 	}
+	return nil
+}
+
+func printPodSecurityPolicy(item *experimental.PodSecurityPolicy, w io.Writer, withNamespace bool, wide bool, showAll bool, columnLabels []string) error {
+	_, err := fmt.Fprintf(w, "%s\t%t\t%v\t%t\t%s\t%s\n", item.Name, item.Spec.Privileged,
+		item.Spec.Capabilities, item.Spec.HostPath, item.Spec.SELinuxContext.Type,
+		item.Spec.RunAsUser.Type)
+	return err
+}
+
+func printPodSecurityPolicyList(list *experimental.PodSecurityPolicyList, w io.Writer, withNamespace bool, wide bool, showAll bool, columnLabels []string) error {
+	for _, item := range list.Items {
+		if err := printPodSecurityPolicy(&item, w, withNamespace, wide, showAll, columnLabels); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

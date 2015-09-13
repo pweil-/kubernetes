@@ -364,6 +364,13 @@ func FuzzerFor(t *testing.T, version string, src rand.Source) *fuzz.Fuzzer {
 			// string, which will cause tests failure.
 			s.APIGroup = "something"
 		},
+		func(psp *experimental.PodSecurityPolicySpec, c fuzz.Continue) {
+			c.FuzzNoCustom(psp) // fuzz self without calling this function again
+			userTypes := []experimental.RunAsUserStrategy{experimental.RunAsUserStrategyMustRunAsNonRoot, experimental.RunAsUserStrategyMustRunAs, experimental.RunAsUserStrategyRunAsAny, experimental.RunAsUserStrategyMustRunAsRange}
+			psp.RunAsUser.Type = userTypes[c.Rand.Intn(len(userTypes))]
+			seLinuxTypes := []experimental.SELinuxContextStrategy{experimental.SELinuxStrategyRunAsAny, experimental.SELinuxStrategyMustRunAs}
+			psp.SELinuxContext.Type = seLinuxTypes[c.Rand.Intn(len(seLinuxTypes))]
+		},
 	)
 	return f
 }
