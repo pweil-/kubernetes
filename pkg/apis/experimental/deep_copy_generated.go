@@ -1046,6 +1046,12 @@ func deepCopy_experimental_HorizontalPodAutoscalerStatus(in HorizontalPodAutosca
 	return nil
 }
 
+func deepCopy_experimental_HostPortRange(in HostPortRange, out *HostPortRange, c *conversion.Cloner) error {
+	out.Start = in.Start
+	out.End = in.End
+	return nil
+}
+
 func deepCopy_experimental_Ingress(in Ingress, out *Ingress, c *conversion.Cloner) error {
 	if err := deepCopy_unversioned_TypeMeta(in.TypeMeta, &out.TypeMeta, c); err != nil {
 		return err
@@ -1252,6 +1258,86 @@ func deepCopy_experimental_JobStatus(in JobStatus, out *JobStatus, c *conversion
 	return nil
 }
 
+func deepCopy_experimental_PodSecurityPolicy(in PodSecurityPolicy, out *PodSecurityPolicy, c *conversion.Cloner) error {
+	if err := deepCopy_unversioned_TypeMeta(in.TypeMeta, &out.TypeMeta, c); err != nil {
+		return err
+	}
+	if err := deepCopy_api_ObjectMeta(in.ObjectMeta, &out.ObjectMeta, c); err != nil {
+		return err
+	}
+	if err := deepCopy_experimental_PodSecurityPolicySpec(in.Spec, &out.Spec, c); err != nil {
+		return err
+	}
+	return nil
+}
+
+func deepCopy_experimental_PodSecurityPolicyList(in PodSecurityPolicyList, out *PodSecurityPolicyList, c *conversion.Cloner) error {
+	if err := deepCopy_unversioned_TypeMeta(in.TypeMeta, &out.TypeMeta, c); err != nil {
+		return err
+	}
+	if err := deepCopy_unversioned_ListMeta(in.ListMeta, &out.ListMeta, c); err != nil {
+		return err
+	}
+	if in.Items != nil {
+		out.Items = make([]PodSecurityPolicy, len(in.Items))
+		for i := range in.Items {
+			if err := deepCopy_experimental_PodSecurityPolicy(in.Items[i], &out.Items[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
+	return nil
+}
+
+func deepCopy_experimental_PodSecurityPolicySpec(in PodSecurityPolicySpec, out *PodSecurityPolicySpec, c *conversion.Cloner) error {
+	out.Privileged = in.Privileged
+	if in.Capabilities != nil {
+		out.Capabilities = make([]api.Capability, len(in.Capabilities))
+		for i := range in.Capabilities {
+			out.Capabilities[i] = in.Capabilities[i]
+		}
+	} else {
+		out.Capabilities = nil
+	}
+	out.HostPath = in.HostPath
+	out.HostNetwork = in.HostNetwork
+	if in.HostPorts != nil {
+		out.HostPorts = make([]HostPortRange, len(in.HostPorts))
+		for i := range in.HostPorts {
+			if err := deepCopy_experimental_HostPortRange(in.HostPorts[i], &out.HostPorts[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.HostPorts = nil
+	}
+	if err := deepCopy_experimental_SELinuxContextStrategyOptions(in.SELinuxContext, &out.SELinuxContext, c); err != nil {
+		return err
+	}
+	if err := deepCopy_experimental_RunAsUserStrategyOptions(in.RunAsUser, &out.RunAsUser, c); err != nil {
+		return err
+	}
+	if in.Users != nil {
+		out.Users = make([]string, len(in.Users))
+		for i := range in.Users {
+			out.Users[i] = in.Users[i]
+		}
+	} else {
+		out.Users = nil
+	}
+	if in.Groups != nil {
+		out.Groups = make([]string, len(in.Groups))
+		for i := range in.Groups {
+			out.Groups[i] = in.Groups[i]
+		}
+	} else {
+		out.Groups = nil
+	}
+	return nil
+}
+
 func deepCopy_experimental_ReplicationControllerDummy(in ReplicationControllerDummy, out *ReplicationControllerDummy, c *conversion.Cloner) error {
 	if err := deepCopy_unversioned_TypeMeta(in.TypeMeta, &out.TypeMeta, c); err != nil {
 		return err
@@ -1275,6 +1361,42 @@ func deepCopy_experimental_RollingUpdateDeployment(in RollingUpdateDeployment, o
 		return err
 	}
 	out.MinReadySeconds = in.MinReadySeconds
+	return nil
+}
+
+func deepCopy_experimental_RunAsUserStrategyOptions(in RunAsUserStrategyOptions, out *RunAsUserStrategyOptions, c *conversion.Cloner) error {
+	out.Type = in.Type
+	if in.UID != nil {
+		out.UID = new(int64)
+		*out.UID = *in.UID
+	} else {
+		out.UID = nil
+	}
+	if in.UIDRangeMin != nil {
+		out.UIDRangeMin = new(int64)
+		*out.UIDRangeMin = *in.UIDRangeMin
+	} else {
+		out.UIDRangeMin = nil
+	}
+	if in.UIDRangeMax != nil {
+		out.UIDRangeMax = new(int64)
+		*out.UIDRangeMax = *in.UIDRangeMax
+	} else {
+		out.UIDRangeMax = nil
+	}
+	return nil
+}
+
+func deepCopy_experimental_SELinuxContextStrategyOptions(in SELinuxContextStrategyOptions, out *SELinuxContextStrategyOptions, c *conversion.Cloner) error {
+	out.Type = in.Type
+	if in.SELinuxOptions != nil {
+		out.SELinuxOptions = new(api.SELinuxOptions)
+		if err := deepCopy_api_SELinuxOptions(*in.SELinuxOptions, out.SELinuxOptions, c); err != nil {
+			return err
+		}
+	} else {
+		out.SELinuxOptions = nil
+	}
 	return nil
 }
 
@@ -1467,6 +1589,7 @@ func init() {
 		deepCopy_experimental_HorizontalPodAutoscalerList,
 		deepCopy_experimental_HorizontalPodAutoscalerSpec,
 		deepCopy_experimental_HorizontalPodAutoscalerStatus,
+		deepCopy_experimental_HostPortRange,
 		deepCopy_experimental_Ingress,
 		deepCopy_experimental_IngressBackend,
 		deepCopy_experimental_IngressList,
@@ -1479,9 +1602,14 @@ func init() {
 		deepCopy_experimental_JobList,
 		deepCopy_experimental_JobSpec,
 		deepCopy_experimental_JobStatus,
+		deepCopy_experimental_PodSecurityPolicy,
+		deepCopy_experimental_PodSecurityPolicyList,
+		deepCopy_experimental_PodSecurityPolicySpec,
 		deepCopy_experimental_ReplicationControllerDummy,
 		deepCopy_experimental_ResourceConsumption,
 		deepCopy_experimental_RollingUpdateDeployment,
+		deepCopy_experimental_RunAsUserStrategyOptions,
+		deepCopy_experimental_SELinuxContextStrategyOptions,
 		deepCopy_experimental_Scale,
 		deepCopy_experimental_ScaleSpec,
 		deepCopy_experimental_ScaleStatus,

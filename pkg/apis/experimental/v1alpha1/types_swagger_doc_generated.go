@@ -178,6 +178,16 @@ func (HorizontalPodAutoscalerStatus) SwaggerDoc() map[string]string {
 	return map_HorizontalPodAutoscalerStatus
 }
 
+var map_HostPortRange = map[string]string{
+	"":      "PodSecurityPolicyPortRange defines a range of host ports that will be enabled by a policy for pods to use.  It requires both the start and end to be defined.",
+	"start": "Start is the beginning of the port range which will be allowed.",
+	"end":   "End is the end of the port range which will be allowed.",
+}
+
+func (HostPortRange) SwaggerDoc() map[string]string {
+	return map_HostPortRange
+}
+
 var map_Ingress = map[string]string{
 	"":         "An Ingress is a way to give services externally-reachable urls. Each Ingress is a collection of rules that allow inbound connections to reach the endpoints defined by a backend.",
 	"metadata": "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
@@ -309,6 +319,43 @@ func (JobStatus) SwaggerDoc() map[string]string {
 	return map_JobStatus
 }
 
+var map_PodSecurityPolicy = map[string]string{
+	"":         "PodSecurityPolicy governs the ability to make requests that affect the SecurityContext that will be applied to a container.",
+	"metadata": "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+	"spec":     "Spec defines the policy enforced.",
+}
+
+func (PodSecurityPolicy) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicy
+}
+
+var map_PodSecurityPolicyList = map[string]string{
+	"":         "PodSecurityPolicyList is a list of PodSecurityPolicy objects.",
+	"metadata": "Standard list metadata. More info: http://docs.k8s.io/api-conventions.md#metadata",
+	"items":    "Items is a list of schema objects.",
+}
+
+func (PodSecurityPolicyList) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicyList
+}
+
+var map_PodSecurityPolicySpec = map[string]string{
+	"":               "PodSecurityPolicySpec defines the policy enforced.",
+	"privileged":     "Privileged determines if a container can request to be run as privileged.",
+	"capabilities":   "Capabilities is a list of capabilities that can be requested to add to the container.",
+	"hostPath":       "HostPath determines if the policy allows containers to use the HostDir volume plugin",
+	"hostNetwork":    "HostNetwork determines if the policy allows the use of HostNetwork in the pod spec.",
+	"hostPorts":      "HostPorts determines which host port ranges it will allow containers to use.  If empty, containers may not bind to host ports.",
+	"seLinuxContext": "SELinuxContext is the strategy that will dictate the allowable labels that may be set in the SecurityContext.",
+	"runAsUser":      "RunAsUser is the strategy that will dictate the allowable RunAsUser values that may be set in the SecurityContext.",
+	"users":          "The users who have permissions to use this policy",
+	"groups":         "The groups that have permission to use this policy",
+}
+
+func (PodSecurityPolicySpec) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicySpec
+}
+
 var map_ReplicationControllerDummy = map[string]string{
 	"": "Dummy definition",
 }
@@ -336,6 +383,28 @@ var map_RollingUpdateDeployment = map[string]string{
 
 func (RollingUpdateDeployment) SwaggerDoc() map[string]string {
 	return map_RollingUpdateDeployment
+}
+
+var map_RunAsUserStrategyOptions = map[string]string{
+	"":            "RunAsUserStrategyOptions defines the strategy type and any options used to create the strategy.",
+	"type":        "Type is the strategy that will dictate the allowable RunAsUser values that may be set in the SecurityContext.",
+	"uid":         "UID is the user id that containers must run as.  Required for the MustRunAs strategy if not using a strategy that supports pre-allocated uids.",
+	"uidRangeMin": "UIDRangeMin defines the min value for a strategy that allocates by a range based strategy.",
+	"uidRangeMax": "UIDRangeMax defines the max value for a strategy that allocates by a range based strategy.",
+}
+
+func (RunAsUserStrategyOptions) SwaggerDoc() map[string]string {
+	return map_RunAsUserStrategyOptions
+}
+
+var map_SELinuxContextStrategyOptions = map[string]string{
+	"":               "SELinuxContextStrategyOptions defines the strategy type and any options used to create the strategy.",
+	"type":           "Type is the strategy that will dictate the allowable labels that may be set in the SecurityContext.",
+	"seLinuxOptions": "seLinuxOptions required to run as; required for MustRunAs More info: http://releases.k8s.io/HEAD/docs/design/security_context.md#security-context",
+}
+
+func (SELinuxContextStrategyOptions) SwaggerDoc() map[string]string {
+	return map_SELinuxContextStrategyOptions
 }
 
 var map_Scale = map[string]string{

@@ -2403,6 +2403,19 @@ func convert_experimental_HorizontalPodAutoscalerStatus_To_v1alpha1_HorizontalPo
 	return autoconvert_experimental_HorizontalPodAutoscalerStatus_To_v1alpha1_HorizontalPodAutoscalerStatus(in, out, s)
 }
 
+func autoconvert_experimental_HostPortRange_To_v1alpha1_HostPortRange(in *experimental.HostPortRange, out *HostPortRange, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*experimental.HostPortRange))(in)
+	}
+	out.Start = in.Start
+	out.End = in.End
+	return nil
+}
+
+func convert_experimental_HostPortRange_To_v1alpha1_HostPortRange(in *experimental.HostPortRange, out *HostPortRange, s conversion.Scope) error {
+	return autoconvert_experimental_HostPortRange_To_v1alpha1_HostPortRange(in, out, s)
+}
+
 func autoconvert_experimental_Ingress_To_v1alpha1_Ingress(in *experimental.Ingress, out *Ingress, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*experimental.Ingress))(in)
@@ -2691,6 +2704,107 @@ func convert_experimental_JobStatus_To_v1alpha1_JobStatus(in *experimental.JobSt
 	return autoconvert_experimental_JobStatus_To_v1alpha1_JobStatus(in, out, s)
 }
 
+func autoconvert_experimental_PodSecurityPolicy_To_v1alpha1_PodSecurityPolicy(in *experimental.PodSecurityPolicy, out *PodSecurityPolicy, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*experimental.PodSecurityPolicy))(in)
+	}
+	if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
+		return err
+	}
+	if err := convert_api_ObjectMeta_To_v1_ObjectMeta(&in.ObjectMeta, &out.ObjectMeta, s); err != nil {
+		return err
+	}
+	if err := convert_experimental_PodSecurityPolicySpec_To_v1alpha1_PodSecurityPolicySpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+func convert_experimental_PodSecurityPolicy_To_v1alpha1_PodSecurityPolicy(in *experimental.PodSecurityPolicy, out *PodSecurityPolicy, s conversion.Scope) error {
+	return autoconvert_experimental_PodSecurityPolicy_To_v1alpha1_PodSecurityPolicy(in, out, s)
+}
+
+func autoconvert_experimental_PodSecurityPolicyList_To_v1alpha1_PodSecurityPolicyList(in *experimental.PodSecurityPolicyList, out *PodSecurityPolicyList, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*experimental.PodSecurityPolicyList))(in)
+	}
+	if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
+		return err
+	}
+	if err := s.Convert(&in.ListMeta, &out.ListMeta, 0); err != nil {
+		return err
+	}
+	if in.Items != nil {
+		out.Items = make([]PodSecurityPolicy, len(in.Items))
+		for i := range in.Items {
+			if err := convert_experimental_PodSecurityPolicy_To_v1alpha1_PodSecurityPolicy(&in.Items[i], &out.Items[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
+	return nil
+}
+
+func convert_experimental_PodSecurityPolicyList_To_v1alpha1_PodSecurityPolicyList(in *experimental.PodSecurityPolicyList, out *PodSecurityPolicyList, s conversion.Scope) error {
+	return autoconvert_experimental_PodSecurityPolicyList_To_v1alpha1_PodSecurityPolicyList(in, out, s)
+}
+
+func autoconvert_experimental_PodSecurityPolicySpec_To_v1alpha1_PodSecurityPolicySpec(in *experimental.PodSecurityPolicySpec, out *PodSecurityPolicySpec, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*experimental.PodSecurityPolicySpec))(in)
+	}
+	out.Privileged = in.Privileged
+	if in.Capabilities != nil {
+		out.Capabilities = make([]v1.Capability, len(in.Capabilities))
+		for i := range in.Capabilities {
+			out.Capabilities[i] = v1.Capability(in.Capabilities[i])
+		}
+	} else {
+		out.Capabilities = nil
+	}
+	out.HostPath = in.HostPath
+	out.HostNetwork = in.HostNetwork
+	if in.HostPorts != nil {
+		out.HostPorts = make([]HostPortRange, len(in.HostPorts))
+		for i := range in.HostPorts {
+			if err := convert_experimental_HostPortRange_To_v1alpha1_HostPortRange(&in.HostPorts[i], &out.HostPorts[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.HostPorts = nil
+	}
+	if err := convert_experimental_SELinuxContextStrategyOptions_To_v1alpha1_SELinuxContextStrategyOptions(&in.SELinuxContext, &out.SELinuxContext, s); err != nil {
+		return err
+	}
+	if err := convert_experimental_RunAsUserStrategyOptions_To_v1alpha1_RunAsUserStrategyOptions(&in.RunAsUser, &out.RunAsUser, s); err != nil {
+		return err
+	}
+	if in.Users != nil {
+		out.Users = make([]string, len(in.Users))
+		for i := range in.Users {
+			out.Users[i] = in.Users[i]
+		}
+	} else {
+		out.Users = nil
+	}
+	if in.Groups != nil {
+		out.Groups = make([]string, len(in.Groups))
+		for i := range in.Groups {
+			out.Groups[i] = in.Groups[i]
+		}
+	} else {
+		out.Groups = nil
+	}
+	return nil
+}
+
+func convert_experimental_PodSecurityPolicySpec_To_v1alpha1_PodSecurityPolicySpec(in *experimental.PodSecurityPolicySpec, out *PodSecurityPolicySpec, s conversion.Scope) error {
+	return autoconvert_experimental_PodSecurityPolicySpec_To_v1alpha1_PodSecurityPolicySpec(in, out, s)
+}
+
 func autoconvert_experimental_ReplicationControllerDummy_To_v1alpha1_ReplicationControllerDummy(in *experimental.ReplicationControllerDummy, out *ReplicationControllerDummy, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*experimental.ReplicationControllerDummy))(in)
@@ -2732,6 +2846,56 @@ func autoconvert_experimental_RollingUpdateDeployment_To_v1alpha1_RollingUpdateD
 	}
 	out.MinReadySeconds = in.MinReadySeconds
 	return nil
+}
+
+func autoconvert_experimental_RunAsUserStrategyOptions_To_v1alpha1_RunAsUserStrategyOptions(in *experimental.RunAsUserStrategyOptions, out *RunAsUserStrategyOptions, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*experimental.RunAsUserStrategyOptions))(in)
+	}
+	out.Type = RunAsUserStrategy(in.Type)
+	if in.UID != nil {
+		out.UID = new(int64)
+		*out.UID = *in.UID
+	} else {
+		out.UID = nil
+	}
+	if in.UIDRangeMin != nil {
+		out.UIDRangeMin = new(int64)
+		*out.UIDRangeMin = *in.UIDRangeMin
+	} else {
+		out.UIDRangeMin = nil
+	}
+	if in.UIDRangeMax != nil {
+		out.UIDRangeMax = new(int64)
+		*out.UIDRangeMax = *in.UIDRangeMax
+	} else {
+		out.UIDRangeMax = nil
+	}
+	return nil
+}
+
+func convert_experimental_RunAsUserStrategyOptions_To_v1alpha1_RunAsUserStrategyOptions(in *experimental.RunAsUserStrategyOptions, out *RunAsUserStrategyOptions, s conversion.Scope) error {
+	return autoconvert_experimental_RunAsUserStrategyOptions_To_v1alpha1_RunAsUserStrategyOptions(in, out, s)
+}
+
+func autoconvert_experimental_SELinuxContextStrategyOptions_To_v1alpha1_SELinuxContextStrategyOptions(in *experimental.SELinuxContextStrategyOptions, out *SELinuxContextStrategyOptions, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*experimental.SELinuxContextStrategyOptions))(in)
+	}
+	out.Type = SELinuxContextStrategy(in.Type)
+	if in.SELinuxOptions != nil {
+		out.SELinuxOptions = new(v1.SELinuxOptions)
+		if err := convert_api_SELinuxOptions_To_v1_SELinuxOptions(in.SELinuxOptions, out.SELinuxOptions, s); err != nil {
+			return err
+		}
+	} else {
+		out.SELinuxOptions = nil
+	}
+	return nil
+}
+
+func convert_experimental_SELinuxContextStrategyOptions_To_v1alpha1_SELinuxContextStrategyOptions(in *experimental.SELinuxContextStrategyOptions, out *SELinuxContextStrategyOptions, s conversion.Scope) error {
+	return autoconvert_experimental_SELinuxContextStrategyOptions_To_v1alpha1_SELinuxContextStrategyOptions(in, out, s)
 }
 
 func autoconvert_experimental_Scale_To_v1alpha1_Scale(in *experimental.Scale, out *Scale, s conversion.Scope) error {
@@ -3209,6 +3373,19 @@ func convert_v1alpha1_HorizontalPodAutoscalerStatus_To_experimental_HorizontalPo
 	return autoconvert_v1alpha1_HorizontalPodAutoscalerStatus_To_experimental_HorizontalPodAutoscalerStatus(in, out, s)
 }
 
+func autoconvert_v1alpha1_HostPortRange_To_experimental_HostPortRange(in *HostPortRange, out *experimental.HostPortRange, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*HostPortRange))(in)
+	}
+	out.Start = in.Start
+	out.End = in.End
+	return nil
+}
+
+func convert_v1alpha1_HostPortRange_To_experimental_HostPortRange(in *HostPortRange, out *experimental.HostPortRange, s conversion.Scope) error {
+	return autoconvert_v1alpha1_HostPortRange_To_experimental_HostPortRange(in, out, s)
+}
+
 func autoconvert_v1alpha1_Ingress_To_experimental_Ingress(in *Ingress, out *experimental.Ingress, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*Ingress))(in)
@@ -3497,6 +3674,107 @@ func convert_v1alpha1_JobStatus_To_experimental_JobStatus(in *JobStatus, out *ex
 	return autoconvert_v1alpha1_JobStatus_To_experimental_JobStatus(in, out, s)
 }
 
+func autoconvert_v1alpha1_PodSecurityPolicy_To_experimental_PodSecurityPolicy(in *PodSecurityPolicy, out *experimental.PodSecurityPolicy, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*PodSecurityPolicy))(in)
+	}
+	if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
+		return err
+	}
+	if err := convert_v1_ObjectMeta_To_api_ObjectMeta(&in.ObjectMeta, &out.ObjectMeta, s); err != nil {
+		return err
+	}
+	if err := convert_v1alpha1_PodSecurityPolicySpec_To_experimental_PodSecurityPolicySpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+func convert_v1alpha1_PodSecurityPolicy_To_experimental_PodSecurityPolicy(in *PodSecurityPolicy, out *experimental.PodSecurityPolicy, s conversion.Scope) error {
+	return autoconvert_v1alpha1_PodSecurityPolicy_To_experimental_PodSecurityPolicy(in, out, s)
+}
+
+func autoconvert_v1alpha1_PodSecurityPolicyList_To_experimental_PodSecurityPolicyList(in *PodSecurityPolicyList, out *experimental.PodSecurityPolicyList, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*PodSecurityPolicyList))(in)
+	}
+	if err := s.Convert(&in.TypeMeta, &out.TypeMeta, 0); err != nil {
+		return err
+	}
+	if err := s.Convert(&in.ListMeta, &out.ListMeta, 0); err != nil {
+		return err
+	}
+	if in.Items != nil {
+		out.Items = make([]experimental.PodSecurityPolicy, len(in.Items))
+		for i := range in.Items {
+			if err := convert_v1alpha1_PodSecurityPolicy_To_experimental_PodSecurityPolicy(&in.Items[i], &out.Items[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
+	return nil
+}
+
+func convert_v1alpha1_PodSecurityPolicyList_To_experimental_PodSecurityPolicyList(in *PodSecurityPolicyList, out *experimental.PodSecurityPolicyList, s conversion.Scope) error {
+	return autoconvert_v1alpha1_PodSecurityPolicyList_To_experimental_PodSecurityPolicyList(in, out, s)
+}
+
+func autoconvert_v1alpha1_PodSecurityPolicySpec_To_experimental_PodSecurityPolicySpec(in *PodSecurityPolicySpec, out *experimental.PodSecurityPolicySpec, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*PodSecurityPolicySpec))(in)
+	}
+	out.Privileged = in.Privileged
+	if in.Capabilities != nil {
+		out.Capabilities = make([]api.Capability, len(in.Capabilities))
+		for i := range in.Capabilities {
+			out.Capabilities[i] = api.Capability(in.Capabilities[i])
+		}
+	} else {
+		out.Capabilities = nil
+	}
+	out.HostPath = in.HostPath
+	out.HostNetwork = in.HostNetwork
+	if in.HostPorts != nil {
+		out.HostPorts = make([]experimental.HostPortRange, len(in.HostPorts))
+		for i := range in.HostPorts {
+			if err := convert_v1alpha1_HostPortRange_To_experimental_HostPortRange(&in.HostPorts[i], &out.HostPorts[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.HostPorts = nil
+	}
+	if err := convert_v1alpha1_SELinuxContextStrategyOptions_To_experimental_SELinuxContextStrategyOptions(&in.SELinuxContext, &out.SELinuxContext, s); err != nil {
+		return err
+	}
+	if err := convert_v1alpha1_RunAsUserStrategyOptions_To_experimental_RunAsUserStrategyOptions(&in.RunAsUser, &out.RunAsUser, s); err != nil {
+		return err
+	}
+	if in.Users != nil {
+		out.Users = make([]string, len(in.Users))
+		for i := range in.Users {
+			out.Users[i] = in.Users[i]
+		}
+	} else {
+		out.Users = nil
+	}
+	if in.Groups != nil {
+		out.Groups = make([]string, len(in.Groups))
+		for i := range in.Groups {
+			out.Groups[i] = in.Groups[i]
+		}
+	} else {
+		out.Groups = nil
+	}
+	return nil
+}
+
+func convert_v1alpha1_PodSecurityPolicySpec_To_experimental_PodSecurityPolicySpec(in *PodSecurityPolicySpec, out *experimental.PodSecurityPolicySpec, s conversion.Scope) error {
+	return autoconvert_v1alpha1_PodSecurityPolicySpec_To_experimental_PodSecurityPolicySpec(in, out, s)
+}
+
 func autoconvert_v1alpha1_ReplicationControllerDummy_To_experimental_ReplicationControllerDummy(in *ReplicationControllerDummy, out *experimental.ReplicationControllerDummy, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*ReplicationControllerDummy))(in)
@@ -3534,6 +3812,56 @@ func autoconvert_v1alpha1_RollingUpdateDeployment_To_experimental_RollingUpdateD
 	// in.MaxSurge has no peer in out
 	out.MinReadySeconds = in.MinReadySeconds
 	return nil
+}
+
+func autoconvert_v1alpha1_RunAsUserStrategyOptions_To_experimental_RunAsUserStrategyOptions(in *RunAsUserStrategyOptions, out *experimental.RunAsUserStrategyOptions, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*RunAsUserStrategyOptions))(in)
+	}
+	out.Type = experimental.RunAsUserStrategy(in.Type)
+	if in.UID != nil {
+		out.UID = new(int64)
+		*out.UID = *in.UID
+	} else {
+		out.UID = nil
+	}
+	if in.UIDRangeMin != nil {
+		out.UIDRangeMin = new(int64)
+		*out.UIDRangeMin = *in.UIDRangeMin
+	} else {
+		out.UIDRangeMin = nil
+	}
+	if in.UIDRangeMax != nil {
+		out.UIDRangeMax = new(int64)
+		*out.UIDRangeMax = *in.UIDRangeMax
+	} else {
+		out.UIDRangeMax = nil
+	}
+	return nil
+}
+
+func convert_v1alpha1_RunAsUserStrategyOptions_To_experimental_RunAsUserStrategyOptions(in *RunAsUserStrategyOptions, out *experimental.RunAsUserStrategyOptions, s conversion.Scope) error {
+	return autoconvert_v1alpha1_RunAsUserStrategyOptions_To_experimental_RunAsUserStrategyOptions(in, out, s)
+}
+
+func autoconvert_v1alpha1_SELinuxContextStrategyOptions_To_experimental_SELinuxContextStrategyOptions(in *SELinuxContextStrategyOptions, out *experimental.SELinuxContextStrategyOptions, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*SELinuxContextStrategyOptions))(in)
+	}
+	out.Type = experimental.SELinuxContextStrategy(in.Type)
+	if in.SELinuxOptions != nil {
+		out.SELinuxOptions = new(api.SELinuxOptions)
+		if err := convert_v1_SELinuxOptions_To_api_SELinuxOptions(in.SELinuxOptions, out.SELinuxOptions, s); err != nil {
+			return err
+		}
+	} else {
+		out.SELinuxOptions = nil
+	}
+	return nil
+}
+
+func convert_v1alpha1_SELinuxContextStrategyOptions_To_experimental_SELinuxContextStrategyOptions(in *SELinuxContextStrategyOptions, out *experimental.SELinuxContextStrategyOptions, s conversion.Scope) error {
+	return autoconvert_v1alpha1_SELinuxContextStrategyOptions_To_experimental_SELinuxContextStrategyOptions(in, out, s)
 }
 
 func autoconvert_v1alpha1_Scale_To_experimental_Scale(in *Scale, out *experimental.Scale, s conversion.Scope) error {
@@ -3765,6 +4093,7 @@ func init() {
 		autoconvert_experimental_HorizontalPodAutoscalerSpec_To_v1alpha1_HorizontalPodAutoscalerSpec,
 		autoconvert_experimental_HorizontalPodAutoscalerStatus_To_v1alpha1_HorizontalPodAutoscalerStatus,
 		autoconvert_experimental_HorizontalPodAutoscaler_To_v1alpha1_HorizontalPodAutoscaler,
+		autoconvert_experimental_HostPortRange_To_v1alpha1_HostPortRange,
 		autoconvert_experimental_IngressBackend_To_v1alpha1_IngressBackend,
 		autoconvert_experimental_IngressList_To_v1alpha1_IngressList,
 		autoconvert_experimental_IngressPath_To_v1alpha1_IngressPath,
@@ -3777,9 +4106,14 @@ func init() {
 		autoconvert_experimental_JobSpec_To_v1alpha1_JobSpec,
 		autoconvert_experimental_JobStatus_To_v1alpha1_JobStatus,
 		autoconvert_experimental_Job_To_v1alpha1_Job,
+		autoconvert_experimental_PodSecurityPolicyList_To_v1alpha1_PodSecurityPolicyList,
+		autoconvert_experimental_PodSecurityPolicySpec_To_v1alpha1_PodSecurityPolicySpec,
+		autoconvert_experimental_PodSecurityPolicy_To_v1alpha1_PodSecurityPolicy,
 		autoconvert_experimental_ReplicationControllerDummy_To_v1alpha1_ReplicationControllerDummy,
 		autoconvert_experimental_ResourceConsumption_To_v1alpha1_ResourceConsumption,
 		autoconvert_experimental_RollingUpdateDeployment_To_v1alpha1_RollingUpdateDeployment,
+		autoconvert_experimental_RunAsUserStrategyOptions_To_v1alpha1_RunAsUserStrategyOptions,
+		autoconvert_experimental_SELinuxContextStrategyOptions_To_v1alpha1_SELinuxContextStrategyOptions,
 		autoconvert_experimental_ScaleSpec_To_v1alpha1_ScaleSpec,
 		autoconvert_experimental_ScaleStatus_To_v1alpha1_ScaleStatus,
 		autoconvert_experimental_Scale_To_v1alpha1_Scale,
@@ -3841,6 +4175,7 @@ func init() {
 		autoconvert_v1alpha1_HorizontalPodAutoscalerSpec_To_experimental_HorizontalPodAutoscalerSpec,
 		autoconvert_v1alpha1_HorizontalPodAutoscalerStatus_To_experimental_HorizontalPodAutoscalerStatus,
 		autoconvert_v1alpha1_HorizontalPodAutoscaler_To_experimental_HorizontalPodAutoscaler,
+		autoconvert_v1alpha1_HostPortRange_To_experimental_HostPortRange,
 		autoconvert_v1alpha1_IngressBackend_To_experimental_IngressBackend,
 		autoconvert_v1alpha1_IngressList_To_experimental_IngressList,
 		autoconvert_v1alpha1_IngressPath_To_experimental_IngressPath,
@@ -3853,9 +4188,14 @@ func init() {
 		autoconvert_v1alpha1_JobSpec_To_experimental_JobSpec,
 		autoconvert_v1alpha1_JobStatus_To_experimental_JobStatus,
 		autoconvert_v1alpha1_Job_To_experimental_Job,
+		autoconvert_v1alpha1_PodSecurityPolicyList_To_experimental_PodSecurityPolicyList,
+		autoconvert_v1alpha1_PodSecurityPolicySpec_To_experimental_PodSecurityPolicySpec,
+		autoconvert_v1alpha1_PodSecurityPolicy_To_experimental_PodSecurityPolicy,
 		autoconvert_v1alpha1_ReplicationControllerDummy_To_experimental_ReplicationControllerDummy,
 		autoconvert_v1alpha1_ResourceConsumption_To_experimental_ResourceConsumption,
 		autoconvert_v1alpha1_RollingUpdateDeployment_To_experimental_RollingUpdateDeployment,
+		autoconvert_v1alpha1_RunAsUserStrategyOptions_To_experimental_RunAsUserStrategyOptions,
+		autoconvert_v1alpha1_SELinuxContextStrategyOptions_To_experimental_SELinuxContextStrategyOptions,
 		autoconvert_v1alpha1_ScaleSpec_To_experimental_ScaleSpec,
 		autoconvert_v1alpha1_ScaleStatus_To_experimental_ScaleStatus,
 		autoconvert_v1alpha1_Scale_To_experimental_Scale,
