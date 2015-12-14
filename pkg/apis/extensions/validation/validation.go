@@ -593,3 +593,89 @@ func ValidateScale(scale *extensions.Scale) field.ErrorList {
 
 	return allErrs
 }
+
+// ValidatePodSecurityPolicyName can be used to check whether the given
+// pod security policy name is valid.
+// Prefix indicates this name will be used as part of generation, in which case
+// trailing dashes are allowed.
+func ValidatePodSecurityPolicyName(name string, prefix bool) (bool, string) {
+	return apivalidation.NameIsDNSSubdomain(name, prefix)
+}
+
+func ValidatePodSecurityPolicy(psp *extensions.PodSecurityPolicy) field.ErrorList {
+	allErrs := field.ErrorList{}
+	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&psp.ObjectMeta, false, ValidatePodSecurityPolicyName, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, ValidatePodSecurityPolicySpec(&psp.Spec, field.NewPath("spec"))...)
+	return allErrs
+}
+
+func ValidatePodSecurityPolicySpec(spec *extensions.PodSecurityPolicySpec, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	// ensure the user strat has a valid type
+	switch spec.RunAsUser.Type {
+	case extensions.RunAsUserStrategyMustRunAs, extensions.RunAsUserStrategyMustRunAsNonRoot, extensions.RunAsUserStrategyRunAsAny, extensions.RunAsUserStrategyMustRunAsRange:
+	//good types
+	default:
+		supported := []string{string(extensions.RunAsUserStrategyMustRunAs),
+			string(extensions.RunAsUserStrategyMustRunAsNonRoot),
+			string(extensions.RunAsUserStrategyRunAsAny)}
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("runAsUser", "type"), spec.RunAsUser.Type, supported))
+	}
+
+	// if specified, uid cannot be negative
+	if spec.RunAsUser.UID != nil {
+		if *spec.RunAsUser.UID < 0 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("runAsUser", "uid"), *spec.RunAsUser.UID, "uid cannot be negative"))
+		}
+	}
+
+	// ensure the selinux strat has a valid type
+	switch spec.SELinuxContext.Type {
+	case extensions.SELinuxStrategyMustRunAs, extensions.SELinuxStrategyRunAsAny:
+	//good types
+	default:
+		supported := []string{string(extensions.SELinuxStrategyMustRunAs), string(extensions.SELinuxStrategyRunAsAny)}
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("seLinuxContext", "type"), spec.RunAsUser.Type, supported))
+	}
+
+	// ensure valid values for volume whitelist
+	allErrs = append(allErrs, validatePodSecurityPolicyVolumes(fldPath, spec.Volumes)...)
+
+	// TODO - finish, consider adding validation of strategy parameters!
+
+	return allErrs
+}
+
+func validatePodSecurityPolicyVolumes(fldPath *field.Path, volumes []extensions.FSType) field.ErrorList {
+	allErrs := field.ErrorList{}
+	allowed := sets.NewString(string(extensions.HostPath),
+		string(extensions.EmptyDir),
+		string(extensions.GCEPersistentDisk),
+		string(extensions.AWSElasticBlockStore),
+		string(extensions.GitRepo),
+		string(extensions.Secret),
+		string(extensions.NFS),
+		string(extensions.ISCSI),
+		string(extensions.Glusterfs),
+		string(extensions.PersistentVolumeClaim),
+		string(extensions.RBD),
+		string(extensions.Cinder),
+		string(extensions.CephFS),
+		string(extensions.DownwardAPI),
+		string(extensions.FC))
+	for _, v := range volumes {
+		if !allowed.Has(string(v)) {
+			allErrs = append(allErrs, field.NotSupported(fldPath.Child("volumes"), v, allowed.List()))
+		}
+	}
+
+	return allErrs
+}
+
+func ValidatePodSecurityPolicyUpdate(old *extensions.PodSecurityPolicy, new *extensions.PodSecurityPolicy) field.ErrorList {
+	allErrs := field.ErrorList{}
+	allErrs = append(allErrs, apivalidation.ValidateObjectMetaUpdate(&old.ObjectMeta, &new.ObjectMeta, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, ValidatePodSecurityPolicySpec(&new.Spec, field.NewPath("spec"))...)
+	return allErrs
+}

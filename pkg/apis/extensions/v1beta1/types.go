@@ -719,3 +719,148 @@ const (
 	LabelSelectorOpExists       LabelSelectorOperator = "Exists"
 	LabelSelectorOpDoesNotExist LabelSelectorOperator = "DoesNotExist"
 )
+
+// PodSecurityPolicy governs the ability to make requests that affect the SecurityContext
+// that will be applied to a pod and container.
+type PodSecurityPolicy struct {
+	unversioned.TypeMeta `json:",inline"`
+	// Standard object's metadata.
+	// More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata
+	v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec defines the policy enforced.
+	Spec PodSecurityPolicySpec `json:"spec,omitempty"`
+}
+
+// PodSecurityPolicySpec defines the policy enforced.
+type PodSecurityPolicySpec struct {
+	// Privileged determines if a pod can request to be run as privileged.
+	Privileged bool `json:"privileged,omitempty"`
+	// Capabilities is a list of capabilities that can be added.
+	Capabilities []v1.Capability `json:"capabilities,omitempty"`
+	// Volumes is a white list of allowed volume plugins.  Empty indicates that all plugins
+	// may be used.
+	Volumes []FSType `json:"volumes,omitempty"`
+	// HostNetwork determines if the policy allows the use of HostNetwork in the pod spec.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+	// HostPorts determines which host port ranges are allowed to be exposed.
+	HostPorts []HostPortRange `json:"hostPorts,omitempty"`
+	// HostPID determines if the policy allows the use of HostPID in the pod spec.
+	HostPID bool `json:"hostPID,omitempty"`
+	// HostIPC determines if the policy allows the use of HostIPC in the pod spec.
+	HostIPC bool `json:"hostIPC,omitempty"`
+	// SELinuxContext is the strategy that will dictate the allowable labels that may be set.
+	SELinuxContext SELinuxContextStrategyOptions `json:"seLinuxContext,omitempty"`
+	// RunAsUser is the strategy that will dictate the allowable RunAsUser values that may be set.
+	RunAsUser RunAsUserStrategyOptions `json:"runAsUser,omitempty"`
+}
+
+// FSType gives strong typing to different file systems that are used by volumes.
+type FSType string
+
+var (
+	HostPath              FSType = "hostPath"
+	EmptyDir              FSType = "emptyDir"
+	GCEPersistentDisk     FSType = "gcePersistentDisk"
+	AWSElasticBlockStore  FSType = "awsElasticBlockStore"
+	GitRepo               FSType = "gitRepo"
+	Secret                FSType = "secret"
+	NFS                   FSType = "nfs"
+	ISCSI                 FSType = "iscsi"
+	Glusterfs             FSType = "glusterfs"
+	PersistentVolumeClaim FSType = "persistentVolumeClaim"
+	RBD                   FSType = "rbd"
+	Cinder                FSType = "cinder"
+	CephFS                FSType = "cephFS"
+	DownwardAPI           FSType = "downwardAPI"
+	FC                    FSType = "fc"
+)
+
+// HostPortRange defines a range of host ports that will be enabled by a policy
+// for pods to use.  It requires both the start and end to be defined.
+type HostPortRange struct {
+	// Start is the beginning of the port range which will be allowed.
+	Start int `json:"start"`
+	// End is the end of the port range which will be allowed.
+	End int `json:"end"`
+}
+
+// SELinuxContextStrategyOptions defines the strategy type and any options used to create the strategy.
+type SELinuxContextStrategyOptions struct {
+	// Type is the strategy that will dictate the allowable labels that may be set.
+	Type SELinuxContextStrategy `json:"type"`
+	// seLinuxOptions required to run as; required for MustRunAs
+	// More info: http://releases.k8s.io/HEAD/docs/design/security_context.md#security-context
+	SELinuxOptions *v1.SELinuxOptions `json:"seLinuxOptions,omitempty"`
+}
+
+// SELinuxContextStrategyType denotes strategy types for generating SELinux options for a
+// SecurityContext.
+type SELinuxContextStrategy string
+
+const (
+	// container must have SELinux labels of X applied.
+	SELinuxStrategyMustRunAs SELinuxContextStrategy = "MustRunAs"
+	// container may make requests for any SELinux context labels.
+	SELinuxStrategyRunAsAny SELinuxContextStrategy = "RunAsAny"
+)
+
+// RunAsUserStrategyOptions defines the strategy type and any options used to create the strategy.
+type RunAsUserStrategyOptions struct {
+	// Type is the strategy that will dictate the allowable RunAsUser values that may be set.
+	Type RunAsUserStrategy `json:"type"`
+	// UID is the user id that containers must run as.  Required for the MustRunAs strategy if not using
+	// a strategy that supports pre-allocated uids.
+	UID *int64 `json:"uid,omitempty"`
+	// UIDRangeMin defines the min value for a strategy that allocates by a range based strategy.
+	UIDRangeMin *int64 `json:"uidRangeMin,omitempty"`
+	// UIDRangeMax defines the max value for a strategy that allocates by a range based strategy.
+	UIDRangeMax *int64 `json:"uidRangeMax,omitempty"`
+}
+
+// RunAsUserStrategyType denotes strategy types for generating RunAsUser values for a
+// SecurityContext.
+type RunAsUserStrategy string
+
+const (
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAs RunAsUserStrategy = "MustRunAs"
+	// container must run as a particular uid.
+	RunAsUserStrategyMustRunAsRange RunAsUserStrategy = "MustRunAsRange"
+	// container must run as a non-root uid
+	RunAsUserStrategyMustRunAsNonRoot RunAsUserStrategy = "MustRunAsNonRoot"
+	// container may make requests for any uid.
+	RunAsUserStrategyRunAsAny RunAsUserStrategy = "RunAsAny"
+)
+
+// PodSecurityPolicyList is a list of PodSecurityPolicy objects.
+type PodSecurityPolicyList struct {
+	unversioned.TypeMeta `json:",inline"`
+	// Standard list metadata.
+	// More info: http://docs.k8s.io/api-conventions.md#metadata
+	unversioned.ListMeta `json:"metadata,omitempty"`
+
+	// Items is a list of schema objects.
+	Items []PodSecurityPolicy `json:"items"`
+}
+
+// PodSecurityPolicyBinding allows groups and users access to a specific PodSecurityPolicy.
+type PodSecurityPolicyBinding struct {
+	unversioned.TypeMeta `json:",inline"`
+	v1.ObjectMeta        `json:"metadata,omitempty"`
+
+	// Users are users who have permissions to use this policy.
+	Users []string `json:"users,omitempty"`
+	// Groups are groups that have permission to use this policy.
+	Groups []string `json:"groups,omitempty"`
+	// PodSecurityPolicyRef is the policy being granted to the subjects.
+	PodSecurityPolicyRef v1.ObjectReference
+}
+
+// PodSecurityPolicyBindingList is a list of PodSecurityPolicyBinding objects.
+type PodSecurityPolicyBindingList struct {
+	unversioned.TypeMeta `json:",inline"`
+	unversioned.ListMeta `json:"metadata,omitempty"`
+
+	Items []PodSecurityPolicyBinding `json:"items"`
+}

@@ -38,6 +38,7 @@ type ExtensionsInterface interface {
 	JobsNamespacer
 	IngressNamespacer
 	ThirdPartyResourceNamespacer
+	PodSecurityPoliciesInterface
 }
 
 // ExtensionsClient is used to interact with experimental Kubernetes features.
@@ -74,6 +75,10 @@ func (c *ExtensionsClient) ServerAPIVersions() (*unversioned.APIVersions, error)
 		return nil, fmt.Errorf("got '%s': %v", string(body), err)
 	}
 	return &v, nil
+}
+
+func (c *ExtensionsClient) PodSecurityPolicies() PodSecurityPolicyInterface {
+	return newPodSecurityPolicy(c)
 }
 
 func (c *ExtensionsClient) HorizontalPodAutoscalers(namespace string) HorizontalPodAutoscalerInterface {

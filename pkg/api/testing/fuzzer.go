@@ -399,6 +399,13 @@ func FuzzerFor(t *testing.T, version string, src rand.Source) *fuzz.Fuzzer {
 			s.MinReplicas = &minReplicas
 			s.CPUUtilization = &extensions.CPUTargetUtilization{TargetPercentage: int(int32(c.RandUint64()))}
 		},
+		func(psp *extensions.PodSecurityPolicySpec, c fuzz.Continue) {
+			c.FuzzNoCustom(psp) // fuzz self without calling this function again
+			userTypes := []extensions.RunAsUserStrategy{extensions.RunAsUserStrategyMustRunAsNonRoot, extensions.RunAsUserStrategyMustRunAs, extensions.RunAsUserStrategyRunAsAny, extensions.RunAsUserStrategyMustRunAsRange}
+			psp.RunAsUser.Type = userTypes[c.Rand.Intn(len(userTypes))]
+			seLinuxTypes := []extensions.SELinuxContextStrategy{extensions.SELinuxStrategyRunAsAny, extensions.SELinuxStrategyMustRunAs}
+			psp.SELinuxContext.Type = seLinuxTypes[c.Rand.Intn(len(seLinuxTypes))]
+		},
 	)
 	return f
 }

@@ -55,6 +55,8 @@ func addKnownTypes() {
 		&Ingress{},
 		&IngressList{},
 		&ListOptions{},
+		&PodSecurityPolicy{},
+		&PodSecurityPolicyList{},
 	)
 }
 
@@ -77,3 +79,5 @@ func (*ThirdPartyResourceDataList) IsAnAPIObject()  {}
 func (*Ingress) IsAnAPIObject()                     {}
 func (*IngressList) IsAnAPIObject()                 {}
 func (*ListOptions) IsAnAPIObject()                 {}
+func (*PodSecurityPolicy) IsAnAPIObject()           {}
+func (*PodSecurityPolicyList) IsAnAPIObject()       {}

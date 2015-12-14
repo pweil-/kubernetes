@@ -1,0 +1,87 @@
+/*
+Copyright 2014 The Kubernetes Authors All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package podsecuritypolicy
+
+import (
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/rest"
+	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/watch"
+)
+
+// Registry is an interface implemented by things that know how to store PodSecurityPolicy objects.
+type Registry interface {
+	// ListPodSecurityPolicies obtains a list of PodSecurityPolicies having labels which match selector.
+	ListPodSecurityPolicies(ctx api.Context, options *unversioned.ListOptions) (*extensions.PodSecurityPolicyList, error)
+	// Watch for new/changed/deleted PodSecurityPolicies
+	WatchPodSecurityPolicies(ctx api.Context, options *unversioned.ListOptions) (watch.Interface, error)
+	// Get a specific PodSecurityPolicy
+	GetPodSecurityPolicy(ctx api.Context, name string) (*extensions.PodSecurityPolicy, error)
+	// Create a PodSecurityPolicy based on a specification.
+	CreatePodSecurityPolicy(ctx api.Context, psp *extensions.PodSecurityPolicy) (*extensions.PodSecurityPolicy, error)
+	// Update an existing PodSecurityPolicy
+	UpdatePodSecurityPolicy(ctx api.Context, scc *extensions.PodSecurityPolicy) (*extensions.PodSecurityPolicy, error)
+	// Delete an existing PodSecurityPolicy
+	DeletePodSecurityPolicy(ctx api.Context, name string) error
+}
+
+// storage puts strong typing around storage calls
+type storage struct {
+	rest.StandardStorage
+}
+
+// NewRegistry returns a new Registry interface for the given Storage. Any mismatched
+// types will panic.
+func NewRegistry(s rest.StandardStorage) Registry {
+	return &storage{s}
+}
+
+func (s *storage) ListPodSecurityPolicies(ctx api.Context, options *unversioned.ListOptions) (*extensions.PodSecurityPolicyList, error) {
+	obj, err := s.List(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	return obj.(*extensions.PodSecurityPolicyList), nil
+}
+
+func (s *storage) WatchPodSecurityPolicies(ctx api.Context, options *unversioned.ListOptions) (watch.Interface, error) {
+	return s.Watch(ctx, options)
+}
+
+func (s *storage) GetPodSecurityPolicy(ctx api.Context, name string) (*extensions.PodSecurityPolicy, error) {
+	obj, err := s.Get(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return obj.(*extensions.PodSecurityPolicy), nil
+}
+
+func (s *storage) CreatePodSecurityPolicy(ctx api.Context, psp *extensions.PodSecurityPolicy) (*extensions.PodSecurityPolicy, error) {
+	obj, err := s.Create(ctx, psp)
+	return obj.(*extensions.PodSecurityPolicy), err
+}
+
+func (s *storage) UpdatePodSecurityPolicy(ctx api.Context, psp *extensions.PodSecurityPolicy) (*extensions.PodSecurityPolicy, error) {
+	obj, _, err := s.Update(ctx, psp)
+	return obj.(*extensions.PodSecurityPolicy), err
+}
+
+func (s *storage) DeletePodSecurityPolicy(ctx api.Context, name string) error {
+	_, err := s.Delete(ctx, name, nil)
+	return err
+}

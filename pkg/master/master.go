@@ -62,6 +62,7 @@ import (
 	pvetcd "k8s.io/kubernetes/pkg/registry/persistentvolume/etcd"
 	pvcetcd "k8s.io/kubernetes/pkg/registry/persistentvolumeclaim/etcd"
 	podetcd "k8s.io/kubernetes/pkg/registry/pod/etcd"
+	pspetcd "k8s.io/kubernetes/pkg/registry/podsecuritypolicy/etcd"
 	podtemplateetcd "k8s.io/kubernetes/pkg/registry/podtemplate/etcd"
 	resourcequotaetcd "k8s.io/kubernetes/pkg/registry/resourcequota/etcd"
 	secretetcd "k8s.io/kubernetes/pkg/registry/secret/etcd"
@@ -1089,6 +1090,10 @@ func (m *Master) experimental(c *Config) *apiserver.APIGroupVersion {
 		ingressStorage, ingressStatusStorage := ingressetcd.NewREST(dbClient("ingresses"), storageDecorator)
 		storage["ingresses"] = ingressStorage
 		storage["ingresses/status"] = ingressStatusStorage
+	}
+	if isEnabled("podsecuritypolicy") {
+		podSecurityPolicyStorage := pspetcd.NewREST(dbClient("podsecuritypolicy"), storageDecorator)
+		storage["podSecurityPolicies"] = podSecurityPolicyStorage
 	}
 
 	extensionsGroup := latest.GroupOrDie("extensions")

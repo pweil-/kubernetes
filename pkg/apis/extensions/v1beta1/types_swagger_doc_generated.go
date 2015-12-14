@@ -235,6 +235,16 @@ func (HorizontalPodAutoscalerStatus) SwaggerDoc() map[string]string {
 	return map_HorizontalPodAutoscalerStatus
 }
 
+var map_HostPortRange = map[string]string{
+	"":      "HostPortRange defines a range of host ports that will be enabled by a policy for pods to use.  It requires both the start and end to be defined.",
+	"start": "Start is the beginning of the port range which will be allowed.",
+	"end":   "End is the end of the port range which will be allowed.",
+}
+
+func (HostPortRange) SwaggerDoc() map[string]string {
+	return map_HostPortRange
+}
+
 var map_Ingress = map[string]string{
 	"":         "Ingress is a collection of rules that allow inbound connections to reach the endpoints defined by a backend. An Ingress can be configured to give services externally-reachable urls, load balance traffic, terminate SSL, offer name based virtual hosting etc.",
 	"metadata": "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
@@ -406,6 +416,62 @@ func (NodeUtilization) SwaggerDoc() map[string]string {
 	return map_NodeUtilization
 }
 
+var map_PodSecurityPolicy = map[string]string{
+	"":         "PodSecurityPolicy governs the ability to make requests that affect the SecurityContext that will be applied to a pod and container.",
+	"metadata": "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+	"spec":     "Spec defines the policy enforced.",
+}
+
+func (PodSecurityPolicy) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicy
+}
+
+var map_PodSecurityPolicyBinding = map[string]string{
+	"":                     "PodSecurityPolicyBinding allows groups and users access to a specific PodSecurityPolicy.",
+	"users":                "Users are users who have permissions to use this policy.",
+	"groups":               "Groups are groups that have permission to use this policy.",
+	"PodSecurityPolicyRef": "PodSecurityPolicyRef is the policy being granted to the subjects.",
+}
+
+func (PodSecurityPolicyBinding) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicyBinding
+}
+
+var map_PodSecurityPolicyBindingList = map[string]string{
+	"": "PodSecurityPolicyBindingList is a list of PodSecurityPolicyBinding objects.",
+}
+
+func (PodSecurityPolicyBindingList) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicyBindingList
+}
+
+var map_PodSecurityPolicyList = map[string]string{
+	"":         "PodSecurityPolicyList is a list of PodSecurityPolicy objects.",
+	"metadata": "Standard list metadata. More info: http://docs.k8s.io/api-conventions.md#metadata",
+	"items":    "Items is a list of schema objects.",
+}
+
+func (PodSecurityPolicyList) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicyList
+}
+
+var map_PodSecurityPolicySpec = map[string]string{
+	"":               "PodSecurityPolicySpec defines the policy enforced.",
+	"privileged":     "Privileged determines if a pod can request to be run as privileged.",
+	"capabilities":   "Capabilities is a list of capabilities that can be added.",
+	"volumes":        "Volumes is a white list of allowed volume plugins.  Empty indicates that all plugins may be used.",
+	"hostNetwork":    "HostNetwork determines if the policy allows the use of HostNetwork in the pod spec.",
+	"hostPorts":      "HostPorts determines which host port ranges are allowed to be exposed.",
+	"hostPID":        "HostPID determines if the policy allows the use of HostPID in the pod spec.",
+	"hostIPC":        "HostIPC determines if the policy allows the use of HostIPC in the pod spec.",
+	"seLinuxContext": "SELinuxContext is the strategy that will dictate the allowable labels that may be set.",
+	"runAsUser":      "RunAsUser is the strategy that will dictate the allowable RunAsUser values that may be set.",
+}
+
+func (PodSecurityPolicySpec) SwaggerDoc() map[string]string {
+	return map_PodSecurityPolicySpec
+}
+
 var map_ReplicationControllerDummy = map[string]string{
 	"": "Dummy definition",
 }
@@ -423,6 +489,28 @@ var map_RollingUpdateDeployment = map[string]string{
 
 func (RollingUpdateDeployment) SwaggerDoc() map[string]string {
 	return map_RollingUpdateDeployment
+}
+
+var map_RunAsUserStrategyOptions = map[string]string{
+	"":            "RunAsUserStrategyOptions defines the strategy type and any options used to create the strategy.",
+	"type":        "Type is the strategy that will dictate the allowable RunAsUser values that may be set.",
+	"uid":         "UID is the user id that containers must run as.  Required for the MustRunAs strategy if not using a strategy that supports pre-allocated uids.",
+	"uidRangeMin": "UIDRangeMin defines the min value for a strategy that allocates by a range based strategy.",
+	"uidRangeMax": "UIDRangeMax defines the max value for a strategy that allocates by a range based strategy.",
+}
+
+func (RunAsUserStrategyOptions) SwaggerDoc() map[string]string {
+	return map_RunAsUserStrategyOptions
+}
+
+var map_SELinuxContextStrategyOptions = map[string]string{
+	"":               "SELinuxContextStrategyOptions defines the strategy type and any options used to create the strategy.",
+	"type":           "Type is the strategy that will dictate the allowable labels that may be set.",
+	"seLinuxOptions": "seLinuxOptions required to run as; required for MustRunAs More info: http://releases.k8s.io/HEAD/docs/design/security_context.md#security-context",
+}
+
+func (SELinuxContextStrategyOptions) SwaggerDoc() map[string]string {
+	return map_SELinuxContextStrategyOptions
 }
 
 var map_Scale = map[string]string{
