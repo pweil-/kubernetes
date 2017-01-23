@@ -675,6 +675,14 @@ func (dm *DockerManager) runContainer(
 			// TODO: Clean up the previously created dir? return the error?
 			glog.Errorf("Error on creating termination-log file %q: %v", containerLogPath, err)
 		} else {
+			// Termination log should be writable by the process group. This is
+			// especially important in the remap environment because otherwise
+			// it won't be possible to write the status. Docker could adjust
+			// permissions on this file for us but it means that right after
+			// container creation, file will be non-writable for a short period.
+			if err := fs.Chmod(0664); err != nil {
+				glog.Warningf("Error on changing mode of the termination-log file %q: %v", containerLogPath, err)
+			}
 			fs.Close() // Close immediately; we're just doing a `touch` here
 			b := fmt.Sprintf("%s:%s", containerLogPath, container.TerminationMessagePath)
 
